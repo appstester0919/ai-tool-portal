@@ -1,0 +1,16 @@
+{
+  "name": "ai-tool-portal",
+  "version": "0.1.0",
+  "description": "Centralised dashboard for all installed AI tools and long-running services. Health monitoring, start/stop/restart actions.",
+  "author": "Hermes Agent",
+  "hermes_version": ">=0.1.0",
+  "dashboard": {
+    "path": "dashboard/index.html",
+    "title": "AI Tool Portal",
+    "icon": "grid"
+  },
+  "api": {
+    "spec": "plugin_api.py"
+  },
+  "tags": ["health", "monitoring", "ai-tools", "comfyui"]
+}
