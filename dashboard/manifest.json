@@ -1,0 +1,13 @@
+{
+  "name": "ai-tool-portal",
+  "label": "AI Tool Portal",
+  "description": "Centralised health dashboard for all AI tools and long-running services",
+  "icon": "layout-dashboard",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/ai-tool-portal",
+    "position": "main"
+  },
+  "entry": "dist/index.js",
+  "api": "plugin_api.py"
+}
