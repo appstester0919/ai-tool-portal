@@ -158,6 +158,16 @@ function showLoading(v) {
 function render() {
   const running = tools.filter(t => healthCache[t.id]?.status === 'up' || healthCache[t.id]?.status === 'warning');
   const stopped = tools.filter(t => healthCache[t.id]?.status === 'down');
+
+  // Sort running: highest uptime first (most "established" services on top)
+  running.sort((a, b) => {
+    const aU = healthCache[a.id]?.uptime_s || 0;
+    const bU = healthCache[b.id]?.uptime_s || 0;
+    return bU - aU;
+  });
+  // Sort stopped: alphabetical
+  stopped.sort((a, b) => a.name.localeCompare(b.name));
+
   const totalUp = running.filter(t => healthCache[t.id]?.status === 'up').length;
 
   document.getElementById('total-badge').textContent = `${totalUp}/${tools.length} up`;
@@ -171,6 +181,9 @@ function render() {
   if (stopped.length) {
     sectionsEl.appendChild(makeSection('stopped', `Stopped (${stopped.length})`, stopped));
   }
+
+  // Restore collapsed state from localStorage
+  restoreCollapsedState();
 }
 
 function makeSection(id, label, toolList) {
@@ -181,6 +194,10 @@ function makeSection(id, label, toolList) {
     const body = section.querySelector('.section-body');
     const isCollapsed = body.classList.toggle('collapsed');
     header.classList.toggle('collapsed', isCollapsed);
+    // Save to localStorage
+    const collapsed = JSON.parse(localStorage.getItem('ai-tool-portal:collapsed') || '[]');
+    if (isCollapsed) { collapsed.push(id); } else { collapsed.splice(collapsed.indexOf(id), 1); }
+    localStorage.setItem('ai-tool-portal:collapsed', JSON.stringify(collapsed));
   };
   header.innerHTML = `<span>▼</span> ${label} <span class="count">${toolList.length}</span>`;
 
@@ -316,9 +333,71 @@ function hideError() {
   document.getElementById('error-box').style.display = 'none';
 }
 
+// ── Collapsed state ─────────────────────────────────────────────
+
+function restoreCollapsedState() {
+  const collapsed = JSON.parse(localStorage.getItem('ai-tool-portal:collapsed') || '[]');
+  collapsed.forEach(id => {
+    const header = document.querySelector(`.section-header`);
+    const allSections = document.querySelectorAll('.section-header');
+    allSections.forEach(h => {
+      // Match by section id in the onclick context — use DOM traversal
+      const section = h.closest('[id]') || h.parentElement;
+    });
+  });
+  // Simpler approach: read the collapsed list and apply classes
+  document.querySelectorAll('.section-header').forEach(h => {
+    const span = h.querySelector('span:not(.count)');
+    const sectionId = h.parentElement.id || h.textContent;
+    // Match by text content
+    const isCollapsed = collapsed.some(c => sectionId.includes(c) || h.textContent.includes(c));
+    if (isCollapsed) {
+      h.classList.add('collapsed');
+      const body = h.nextElementSibling;
+      if (body && body.classList.contains('section-body')) body.classList.add('collapsed');
+    }
+  });
+}
+
+// ── Live uptime ticker ───────────────────────────────────────────
+
+let uptimeTickInterval = null;
+let tickHealthCache = {};
+
+function startUptimeTicker() {
+  // Snapshot health at ticker start
+  tickHealthCache = {};
+  Object.keys(healthCache).forEach(k => { tickHealthCache[k] = { ...healthCache[k] }; });
+  if (uptimeTickInterval) clearInterval(uptimeTickInterval);
+  uptimeTickInterval = setInterval(() => {
+    // Sync from current healthCache (updated by fetchAll)
+    Object.keys(healthCache).forEach(k => {
+      if (!tickHealthCache[k]) tickHealthCache[k] = { ...healthCache[k] };
+      if (healthCache[k].status === 'up' || healthCache[k].status === 'warning') {
+        tickHealthCache[k].uptime_s = (tickHealthCache[k].uptime_s || 0) + 1;
+      }
+    });
+    // Update DOM directly without re-fetch
+    document.querySelectorAll('.card').forEach(card => {
+      const toolId = card.id.replace('card-', '');
+      const h = tickHealthCache[toolId];
+      if (!h || h.status === 'down') return;
+      const metaItems = card.querySelectorAll('.meta-item');
+      if (metaItems[3]) { // Uptime is 4th meta-item (0-indexed: 3)
+        const el = metaItems[3].querySelector('.meta-value');
+        if (el) {
+          const display = fmtUptime(h.uptime_s);
+          if (el.textContent !== display) el.textContent = display;
+        }
+      }
+    });
+  }, 1000);
+}
+
 // ── Init ─────────────────────────────────────────────────────────
 
 fetchAll().then(() => {
+  startUptimeTicker();
   // 30s auto-refresh
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(fetchAll, 30000);

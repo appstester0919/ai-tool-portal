@@ -1,7 +1,7 @@
 {
   "name": "ai-tool-portal",
-  "version": "0.4.0",
-  "description": "v0.4: Frontend card grid, running/stopped sections, 30s auto-refresh, action buttons with confirm modal.",
+  "version": "0.5.0",
+  "description": "v0.5: Sort by uptime, localStorage collapse, live uptime ticker.",
   "author": "Hermes Agent",
   "hermes_version": ">=0.1.0",
   "dashboard": {
