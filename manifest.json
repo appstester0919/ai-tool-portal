@@ -1,7 +1,7 @@
 {
   "name": "ai-tool-portal",
-  "version": "0.1.0",
-  "description": "Centralised dashboard for all installed AI tools and long-running services. Health monitoring, start/stop/restart actions.",
+  "version": "0.4.0",
+  "description": "v0.4: Frontend card grid, running/stopped sections, 30s auto-refresh, action buttons with confirm modal.",
   "author": "Hermes Agent",
   "hermes_version": ">=0.1.0",
   "dashboard": {
