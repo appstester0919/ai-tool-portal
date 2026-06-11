@@ -31,18 +31,19 @@
 
   function StatusDot({ status }) {
     // Color: green=up, yellow=warning, red=crit (process up but RSS above max),
-    //        gray=down/unknown. Add glow shadow + larger size for visibility.
-    const colors = {
-      up:      { bg: "bg-green-500",  shadow: "shadow-[0_0_6px_rgba(34,197,94,0.7)]" },
-      warn:    { bg: "bg-yellow-500", shadow: "shadow-[0_0_6px_rgba(234,179,8,0.7)]" },
-      crit:    { bg: "bg-red-500",    shadow: "shadow-[0_0_6px_rgba(239,68,68,0.8)]" },
-      warning: { bg: "bg-yellow-500", shadow: "shadow-[0_0_6px_rgba(234,179,8,0.7)]" },
-      down:    { bg: "bg-gray-500",   shadow: "" },
-      unknown: { bg: "bg-gray-500",   shadow: "" },
+    //        gray=down/unknown. Larger size + inline glow style for visibility.
+    const styles = {
+      up:      { backgroundColor: "#22c55e", boxShadow: "0 0 8px rgba(34,197,94,0.8)" },
+      warn:    { backgroundColor: "#eab308", boxShadow: "0 0 8px rgba(234,179,8,0.8)" },
+      crit:    { backgroundColor: "#ef4444", boxShadow: "0 0 8px rgba(239,68,68,0.9)" },
+      warning: { backgroundColor: "#eab308", boxShadow: "0 0 8px rgba(234,179,8,0.8)" },
+      down:    { backgroundColor: "#6b7280", boxShadow: "none" },
+      unknown: { backgroundColor: "#6b7280", boxShadow: "none" },
     };
-    const c = colors[status] || colors.unknown;
+    const s = styles[status] || styles.unknown;
     return React.createElement("span", {
-      className: `inline-block h-2.5 w-2.5 rounded-full ${c.bg} ${c.shadow}`,
+      className: "inline-block rounded-full flex-shrink-0",
+      style: { width: "14px", height: "14px", ...s },
       title: status,
     });
   }
@@ -111,16 +112,21 @@
     return React.createElement("div", {
       className: `flex flex-col gap-2 p-4 rounded-xl border bg-card text-card-foreground shadow-sm hover:border-primary/30 transition-colors ${borderCls}`
     },
-      // Header row
-      React.createElement("div", { className: "flex items-center justify-between" },
-        React.createElement("div", { className: "flex items-center gap-2 min-w-0" },
-          React.createElement(StatusDot, { status: effectiveDot }),
+      // Header row: name on top line (full width, no truncation),
+      // then icon+dot+status badge on second line.
+      React.createElement("div", { className: "flex flex-col gap-1.5" },
+        // Tool name (can wrap if very long)
+        React.createElement("div", { className: "flex items-center gap-2" },
           React.createElement("span", { className: "text-base" }, tool.icon || "⚙️"),
-          React.createElement("span", { className: "font-semibold text-sm truncate" }, tool.name)
+          React.createElement("span", { className: "font-semibold text-sm leading-tight" }, tool.name)
         ),
-        React.createElement("span", {
-          className: `text-[10px] px-1.5 py-0.5 rounded-full border uppercase tracking-wider font-medium ${badgeCls}`
-        }, effectiveDot === "ok" ? "up" : (effectiveDot === "warn" ? "up-hi" : (effectiveDot === "crit" ? "up+ram" : effectiveDot)))
+        // Status row: dot + badge
+        React.createElement("div", { className: "flex items-center gap-1.5" },
+          React.createElement(StatusDot, { status: effectiveDot }),
+          React.createElement("span", {
+            className: `text-[10px] px-1.5 py-0.5 rounded-full border uppercase tracking-wider font-medium ${badgeCls}`
+          }, effectiveDot === "ok" ? "up" : (effectiveDot === "warn" ? "up-hi" : (effectiveDot === "crit" ? "up+ram" : effectiveDot)))
+        )
       ),
       // Meta grid
       React.createElement("div", { className: "grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]" },
