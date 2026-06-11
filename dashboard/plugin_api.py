@@ -1,16 +1,16 @@
 """
-AI Tool Portal — v0.2
-Backend API with health checks for 6 core services.
-Full 13-tool support in v0.3.
+AI Tool Portal — v0.3
+Backend API with health checks for 14 tools.
+v0.3: fixed n8n detection (port-based), added ComfyUI generic checker.
 """
-import subprocess, re, json, sys
+import subprocess, re, json, sys, time
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter
 
-# ── Inline tool registry (avoids dynamic import path issues) ──────────────────
+# ── Inline tool registry ───────────────────────────────────────────
 
 HOME = Path.home()
 DRIVE_AI = Path("/mnt/d/AI")
@@ -41,10 +41,10 @@ TOOLS = [
      "stop_cmd": "pkill -f 'hermes dashboard'",
      "restart_cmd": "pkill -f 'hermes dashboard' && sleep 2"},
     {"id": "n8n", "name": "n8n", "category": "workflow", "icon": "Workflow",
-     "default_port": 5678, "version_cmd": ["n8n", "--version"],
+     "default_port": 5678,
+     "version_cmd": ["n8n", "--version"],
      "version_pattern": r"([0-9.]+)",
      "process_patterns": [],
-     "docker_ancestry": "n8nio/n8n",
      "start_cmd": "cd /mnt/d/Docker && docker compose -f n8n-restored.yml up -d",
      "stop_cmd": "cd /mnt/d/Docker && docker compose -f n8n-restored.yml down",
      "restart_cmd": "cd /mnt/d/Docker && docker compose -f n8n-restored.yml restart"},
@@ -110,18 +110,14 @@ CATEGORIES = [
     {"id": "ai_audio", "label": "AI Audio", "icon": "Music"},
 ]
 
-
 def get_tool(id: str):
     return next((t for t in TOOLS if t["id"] == id), None)
 
-
 router = APIRouter()
 
-# ─────────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────
 
-def run_cmd(cmd: list[str], timeout_s: int = 10) -> tuple[str, str, int]:
+def run_cmd(cmd: list[str], timeout_s: int = 15) -> tuple[str, str, int]:
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
         return r.stdout, r.stderr, r.returncode
@@ -190,24 +186,34 @@ def parse_version(stdout: str, pattern: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def get_docker_container(ancestry: str) -> Optional[dict]:
-    """Check if docker container with given ancestry is running."""
-    out, _, rc = run_cmd(["docker", "ps", "--filter", f"ancestor={ancestry}", "--format", "{{.ID}}"])
+def get_docker_container(ancestry_or_port: str, by_port: bool = False) -> Optional[dict]:
+    """Lookup docker container by ancestry name OR publish port.
+
+    by_port=True: uses docker ps --filter publish=<port>
+    by_port=False: uses docker ps --filter ancestor=<image>
+    """
+    if by_port:
+        filter_arg = f"publish={ancestry_or_port}"
+    else:
+        filter_arg = f"ancestor={ancestry_or_port}"
+    out, _, rc = run_cmd(["docker", "ps", "--filter", filter_arg, "--format", "{{.ID}}|{{.Image}}|{{.Names}}"])
     if rc != 0 or not out.strip():
         return None
-    cid = out.strip()
+    line = out.strip().split("\n")[0]
+    parts = line.split("|")
+    cid = parts[0]
+    image = parts[1] if len(parts) > 1 else "?"
+    name = parts[2] if len(parts) > 2 else "?"
     stats_out, _, _ = run_cmd(["docker", "stats", "--no-stream", "--format", "{{.CPUPerc}}|{{.MemUsage}}", cid])
     if stats_out.strip():
-        parts = stats_out.strip().split("|")
-        cpu = parts[0].rstrip("%") if len(parts) > 0 else "0"
-        mem = parts[1].split("/")[0].strip() if len(parts) > 1 else "0"
-        return {"id": cid, "cpu_pct": cpu, "mem": mem}
-    return {"id": cid, "cpu_pct": "?", "mem": "?"}
+        sparts = stats_out.strip().split("|")
+        cpu = sparts[0].rstrip("%") if len(sparts) > 0 else "0"
+        mem = sparts[1].split("/")[0].strip() if len(sparts) > 1 else "0"
+        return {"id": cid, "image": image, "name": name, "cpu_pct": cpu, "mem": mem}
+    return {"id": cid, "image": image, "name": name, "cpu_pct": "?", "mem": "?"}
 
 
-# ─────────────────────────────────────────────────────────────────
-# Health check per service type
-# ─────────────────────────────────────────────────────────────────
+# ── Health check functions ─────────────────────────────────────────
 
 def check_openclaw(tool: dict) -> dict:
     proc = get_proc_by_patterns(tool["process_patterns"], tool.get("process_comm_filter"))
@@ -268,7 +274,8 @@ def check_hermes_gateway(tool: dict) -> dict:
 
 
 def check_n8n(tool: dict) -> dict:
-    container = get_docker_container(tool["docker_ancestry"])
+    # Use port-based lookup (works for custom image names like n8nio-restored)
+    container = get_docker_container(str(tool["default_port"]), by_port=True)
     listening = port_listening(tool["default_port"])
     if container:
         status = "up" if listening else "warning"
@@ -318,22 +325,57 @@ def check_prayer_server(tool: dict) -> dict:
     }
 
 
+def check_comfyui(tool: dict) -> dict:
+    """Generic checker for all ComfyUI instances."""
+    proc = get_proc_by_patterns(tool["process_patterns"], tool.get("process_comm_filter"))
+    listening = port_listening(tool["default_port"])
+    # ComfyUI: process running but port not ready = warning (starting up)
+    # both = up, neither = down
+    status = "up" if (proc and listening) else ("warning" if (proc or listening) else "down")
+    rss, uptime = None, None
+    if proc:
+        info = get_proc_info(proc["pid"])
+        rss = round(info["rss_kb"] / 1024, 1) if info["rss_kb"] else None
+        uptime = info["uptime_s"]
+    return {
+        "tool_id": tool["id"],
+        "name": tool["name"],
+        "category": tool["category"],
+        "icon": tool["icon"],
+        "status": status,
+        "port": tool["default_port"],
+        "port_listening": listening,
+        "pid": proc["pid"] if proc else None,
+        "rss_mb": rss,
+        "uptime_s": uptime,
+        "checked_at": now_iso(),
+    }
+
+
 CHECKERS = {
     "openclaw": check_openclaw,
     "hermes_gateway": check_hermes_gateway,
     "hermes_dashboard": check_hermes_gateway,
     "n8n": check_n8n,
     "prayer_server": check_prayer_server,
+    # ComfyUI instances — all use same generic checker
+    "comfyui_3d": check_comfyui,
+    "comfyui_ideogram": check_comfyui,
+    "comfyui_ltx": check_comfyui,
+    "comfyui_heartmula": check_comfyui,
+    "comfyui_krita": check_comfyui,
+    "comfyui_standard": check_comfyui,
+    "comfyui_qwen3tts": check_comfyui,
+    "comfyui_win_data": check_comfyui,
+    "comfyui_documents": check_comfyui,
 }
 
 
-# ─────────────────────────────────────────────────────────────────
-# API routes
-# ─────────────────────────────────────────────────────────────────
+# ── API routes ───────────────────────────────────────────────────
 
 @router.get("/tools")
 async def all_tools():
-    """Return all tools with live health checks."""
+    """Return all 14 tools with live health checks."""
     summaries = []
     for tool in TOOLS:
         checker = CHECKERS.get(tool["id"])
@@ -352,7 +394,7 @@ async def all_tools():
     return {
         "tools": summaries,
         "categories": CATEGORIES,
-        "version": "0.2.0",
+        "version": "0.3.0",
         "checked_at": now_iso(),
     }
 
@@ -390,17 +432,15 @@ async def tool_action(tool_id: str, action: str = None, confirm: bool = False):
     else:
         return {"ok": False, "error": f"Unknown action: {action}", "tool_id": tool_id}
     if not action_cmd:
-        return {"ok": False, "error": f"No action cmd for {action}", "tool_id": tool_id}
-    start_time = datetime.now(timezone.utc)
+        return {"ok": False, "error": f"No {action} cmd for {tool_id}", "tool_id": tool_id}
+    start_time = time.time()
     out, err, rc = run_cmd(action_cmd.split(" ") if isinstance(action_cmd, str) else action_cmd, timeout_s=30)
-    duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
     return {
         "ok": rc == 0,
         "stdout": out[:500],
         "stderr": err[:500],
         "exit_code": rc,
-        "duration_ms": duration_ms,
+        "duration_ms": int((time.time() - start_time) * 1000),
         "tool_id": tool_id,
         "action": action,
-        "new_status": "unknown",
     }

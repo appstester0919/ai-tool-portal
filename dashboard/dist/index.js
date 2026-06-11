@@ -1,10 +1,8 @@
-/* eslint-disable */
 /**
- * AI Tool Portal v1.1 — Dashboard Plugin
+ * AI Tool Portal v1.2 — Dashboard Plugin
  *
  * Health dashboard + Start/Stop/Restart for AI tools and long-running services.
- * Calls /api/plugins/ai-tool-portal/tools for full tool list + live health.
- * Auto-refresh every 30s.
+ * v1.2: Fixed LOADING bug, icon-only action buttons, status-color card borders.
  *
  * Plain IIFE, no build step. Uses window.__HERMES_PLUGIN_SDK__ for React.
  */
@@ -14,6 +12,7 @@
   const SDK = window.__HERMES_PLUGIN_SDK__;
   const register = window.__HERMES_PLUGINS__?.register;
   if (!SDK && !register) {
+    console.error("[ai-tool-portal] SDK or register not found, aborting.");
     return;
   }
 
@@ -41,87 +40,83 @@
     return React.createElement("span", { className: `inline-block h-2 w-2 rounded-full ${cls}` });
   }
 
-  // ── Action Buttons ─────────────────────────────────────────────
+  // ── Icon-only Action Buttons ───────────────────────────────────
 
   function ActionButtons({ tool, health, onAction }) {
     const status = health?.status || "down";
-    const canStart = status === "down" || status === "unknown";
-    const canStop = status === "up" || status === "warning";
-    const canRestart = status === "up" || status === "warning";
+    const canStart  = status === "down" || status === "unknown";
+    const canStop   = status === "up"   || status === "warning";
+    const canRestart = status === "up"  || status === "warning";
 
-    return React.createElement("div", { className: "flex items-center gap-1.5 pt-2 border-t border-border mt-2" },
+    const btn = (label, action, enabled, colorCls, hoverCls, title) =>
       React.createElement("button", {
-        onClick: () => onAction(tool.tool_id || tool.id, "start"),
-        disabled: !canStart,
-        className: `flex-1 px-2 py-1 rounded text-xs font-medium transition-colors uppercase tracking-wider border ${
-          canStart
-            ? "bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20 cursor-pointer"
-            : "bg-gray-500/5 text-gray-500 border-gray-500/10 cursor-not-allowed opacity-40"
-        }`
-      }, "▶ Start"),
-      React.createElement("button", {
-        onClick: () => onAction(tool.tool_id || tool.id, "stop"),
-        disabled: !canStop,
-        className: `flex-1 px-2 py-1 rounded text-xs font-medium transition-colors uppercase tracking-wider border ${
-          canStop
-            ? "bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20 cursor-pointer"
-            : "bg-gray-500/5 text-gray-500 border-gray-500/10 cursor-not-allowed opacity-40"
-        }`
-      }, "■ Stop"),
-      React.createElement("button", {
-        onClick: () => onAction(tool.tool_id || tool.id, "restart"),
-        disabled: !canRestart,
-        className: `flex-1 px-2 py-1 rounded text-xs font-medium transition-colors uppercase tracking-wider border ${
-          canRestart
-            ? "bg-blue-500/10 text-blue-500 border-blue-500/20 hover:bg-blue-500/20 cursor-pointer"
-            : "bg-gray-500/5 text-gray-500 border-gray-500/10 cursor-not-allowed opacity-40"
-        }`
-      }, "↻ Restart")
+        key: action,
+        onClick: () => onAction(tool.tool_id || tool.id, action),
+        disabled: !enabled,
+        title,
+        className: `w-7 h-7 rounded flex items-center justify-center text-xs transition-colors border ${colorCls} ${hoverCls} ${enabled ? "cursor-pointer" : "cursor-not-allowed opacity-30"}`
+      }, label);
+
+    return React.createElement("div", {
+      className: "flex items-center gap-1 pt-2 border-t border-border mt-2"
+    },
+      btn("▶", "start",   canStart,  "text-green-500 border-green-500/20 hover:bg-green-500/20",  "text-green-500/10",  "Start "  + tool.name),
+      btn("■", "stop",    canStop,   "text-red-500   border-red-500/20    hover:bg-red-500/20",    "text-red-500/10",    "Stop "   + tool.name),
+      btn("↻", "restart", canRestart,"text-blue-500  border-blue-500/20   hover:bg-blue-500/20",   "text-blue-500/10",   "Restart "+ tool.name)
     );
   }
 
   // ── Tool Card ──────────────────────────────────────────────────
 
+  const STATUS_BORDER = {
+    up:      "border-green-500/40",
+    warning: "border-yellow-500/40",
+    down:    "border-gray-600/30",
+    unknown: "border-gray-600/30",
+  };
+  const STATUS_BADGE = {
+    up:      "bg-green-500/10 text-green-500 border-green-500/20",
+    warning: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+    down:    "bg-gray-500/10 text-gray-400 border-gray-500/20",
+    unknown: "bg-gray-500/10 text-gray-400 border-gray-500/20",
+  };
+
   function ToolCard({ tool, health, onAction }) {
     const status = health?.status || "down";
-
-    const statusBadgeCls = {
-      up: "bg-green-500/10 text-green-500 border-green-500/20",
-      warning: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-      down: "bg-gray-500/10 text-gray-400 border-gray-500/20",
-      unknown: "bg-gray-500/10 text-gray-400 border-gray-500/20",
-    }[status] || statusBadgeCls.down;
+    const borderCls = STATUS_BORDER[status] || STATUS_BORDER.down;
+    const badgeCls  = STATUS_BADGE[status]  || STATUS_BADGE.down;
 
     return React.createElement("div", {
-      className: "flex flex-col gap-3 p-4 rounded-xl border bg-card text-card-foreground shadow-sm hover:border-primary/30 transition-colors",
+      className: `flex flex-col gap-2 p-3 rounded-xl border bg-card text-card-foreground shadow-sm hover:border-primary/30 transition-colors ${borderCls}`
     },
-      // Header
+      // Header row
       React.createElement("div", { className: "flex items-center justify-between" },
         React.createElement("div", { className: "flex items-center gap-2" },
-          React.createElement("span", { className: "text-lg" }, tool.icon || "⚙️"),
+          React.createElement("span", { className: "text-base" }, tool.icon || "⚙️"),
           React.createElement("span", { className: "font-semibold text-sm" }, tool.name)
         ),
         React.createElement("span", {
-          className: `text-xs px-2 py-0.5 rounded-full border uppercase tracking-wider font-medium ${statusBadgeCls}`
+          className: `text-[10px] px-1.5 py-0.5 rounded-full border uppercase tracking-wider font-medium ${badgeCls}`
         }, status)
       ),
       // Meta grid
-      React.createElement("div", { className: "grid grid-cols-2 gap-x-4 gap-y-1 text-xs" },
+      React.createElement("div", { className: "grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]" },
         React.createElement("div", { className: "flex flex-col" },
-          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[10px]" }, "Port"),
-          React.createElement("span", { className: "font-mono" }, tool.port || tool.default_port)
+          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[9px]" }, "Port"),
+          React.createElement("span", { className: "font-mono" }, tool.port || tool.default_port || "—")
         ),
         React.createElement("div", { className: "flex flex-col" },
-          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[10px]" }, "PID"),
-          React.createElement("span", { className: `font-mono ${health?.pid ? "" : "text-muted-foreground"}` }, health?.pid || "—")
+          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[9px]" }, "PID"),
+          React.createElement("span", { className: `font-mono ${health?.pid ? "" : "text-muted-foreground"}` },
+            health?.pid || "—")
         ),
         React.createElement("div", { className: "flex flex-col" },
-          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[10px]" }, "RSS"),
+          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[9px]" }, "RSS"),
           React.createElement("span", { className: `font-mono ${health?.rss_mb ? "" : "text-muted-foreground"}` },
             health?.rss_mb != null ? health.rss_mb.toFixed(1) + " MB" : "—")
         ),
         React.createElement("div", { className: "flex flex-col" },
-          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[10px]" }, "Uptime"),
+          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[9px]" }, "Uptime"),
           React.createElement("span", { className: `font-mono ${health?.uptime_s != null ? "" : "text-muted-foreground"}` },
             fmtUptime(health?.uptime_s))
         )
@@ -138,8 +133,8 @@
 
     const { tool, action } = pendingAction;
     const warnings = {
-      start: `Start ${tool?.name}? This may launch a background service on port ${tool?.port}.`,
-      stop: `Stop ${tool?.name}? This will interrupt any active workflows or sessions.`,
+      start:   `Start ${tool?.name}? This may launch a background service.`,
+      stop:    `Stop ${tool?.name}? This will interrupt any active workflows or sessions.`,
       restart: `Restart ${tool?.name}? This will briefly disconnect all active sessions.`,
     };
     const iconMap = { start: "▶", stop: "■", restart: "↻" };
@@ -152,25 +147,16 @@
       React.createElement("div", {
         className: "bg-card border border-border rounded-xl shadow-xl p-6 max-w-sm w-full mx-4"
       },
-        // Title
         React.createElement("div", { className: "flex items-center gap-3 mb-4" },
           React.createElement("span", { className: "text-2xl" }, iconMap[action] || "?"),
           React.createElement("span", { className: "font-semibold text-base" },
             `${action.charAt(0).toUpperCase() + action.slice(1)} ${tool?.name}?`)
         ),
-        // Warning text
         React.createElement("p", { className: "text-muted-foreground text-sm mb-4" },
-          warnings[action] || `${action} ${tool?.name}?`
-        ),
-        // Port info
-        React.createElement("div", { className: "text-xs font-mono text-muted-foreground mb-4" },
-          `Port: ${tool?.port}`
-        ),
-        // Error display
+          warnings[action] || `${action} ${tool?.name}?`),
         actionError && React.createElement("div", {
-          className: "mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-500 font-mono"
+          className: "mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-500 font-mono overflow-auto"
         }, `Error: ${actionError}`),
-        // Buttons
         React.createElement("div", { className: "flex gap-3 justify-end" },
           React.createElement("button", {
             onClick: onCancel,
@@ -194,25 +180,21 @@
   // ── Main Page ──────────────────────────────────────────────────
 
   function AiToolPortalPage() {
-    const [tools, setTools] = useState([]);
-    const [healthMap, setHealthMap] = useState({});
+    const [tools, setTools]       = useState([]);      // health list from API
     const [categories, setCategories] = useState([]);
     const [lastUpdated, setLastUpdated] = useState(null);
-    const [error, setError] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [error, setError]       = useState(null);
+    const [loading, setLoading]   = useState(true);
 
     // Action modal state
-    const [pendingAction, setPendingAction] = useState(null); // { tool, action }
+    const [pendingAction, setPendingAction] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
-    const [actionError, setActionError] = useState(null);
+    const [actionError, setActionError]     = useState(null);
 
     const fetchData = useCallback(async () => {
       try {
         const json = await SDK.fetchJSON("/api/plugins/ai-tool-portal/tools");
         setTools(json.tools || []);
-        const map = {};
-        (json.tools || []).forEach(t => { map[t.tool_id] = t; });
-        setHealthMap(map);
         setCategories(json.categories || []);
         setError(null);
         setLastUpdated(new Date());
@@ -229,24 +211,20 @@
       return () => clearInterval(id);
     }, [fetchData]);
 
-    // Open action confirmation modal
     const doAction = useCallback((toolId, action) => {
-      // tools is the healthMap keys list — each has tool_id (not id)
-      const registryTool = tools.find(t => t.tool_id === toolId);
+      const registryTool = tools.find(t => (t.tool_id || t.id) === toolId);
       if (!registryTool) return;
       setPendingAction({ tool: registryTool, action });
       setActionError(null);
       setActionLoading(false);
     }, [tools]);
 
-    // Close modal
     const closeModal = useCallback(() => {
       setPendingAction(null);
       setActionError(null);
       setActionLoading(false);
     }, []);
 
-    // Confirm and execute action
     const confirmAction = useCallback(async () => {
       if (!pendingAction) return;
       const { tool, action } = pendingAction;
@@ -259,7 +237,6 @@
           { method: "POST" }
         );
         if (result.ok) {
-          // Success — close modal + refresh after 1.5s
           setTimeout(() => { closeModal(); fetchData(); }, 1500);
         } else {
           setActionError(result.stderr || result.error || `Action failed (exit ${result.exit_code})`);
@@ -271,13 +248,16 @@
       }
     }, [pendingAction, closeModal, fetchData]);
 
-    const upCount = tools.filter(t => healthMap[t.tool_id]?.status === "up").length;
+    // Build health map for O(1) lookup
+    const healthMap = {};
+    tools.forEach(t => { healthMap[t.tool_id || t.id] = t; });
+
+    const upCount   = tools.filter(t => t.status === "up").length;
     const totalCount = tools.length;
 
-    // Group by category
-    const cats = categories.length ? categories : [];
+    // Group tools by category
     const byCategory = {};
-    cats.forEach(c => { byCategory[c.id] = []; });
+    categories.forEach(c => { byCategory[c.id] = []; });
     tools.forEach(t => {
       const cat = t.category || "other";
       if (!byCategory[cat]) byCategory[cat] = [];
@@ -285,7 +265,6 @@
     });
 
     return React.createElement(React.Fragment, null,
-      // Main content
       React.createElement("div", { className: "flex flex-col gap-5 p-5" },
         // Header
         React.createElement("div", { className: "flex items-center justify-between" },
@@ -303,18 +282,18 @@
           )
         ),
 
-        // Error
+        // Error banner
         error && React.createElement("div", {
           className: "p-3 border border-red-500/30 bg-red-500/10 rounded-lg text-xs text-red-500 font-mono"
         }, "Failed to load: " + error),
 
-        // Loading
-        loading && !tools.length && React.createElement("div", {
+        // Loading indicator
+        loading && React.createElement("div", {
           className: "flex items-center justify-center py-12 text-muted-foreground text-xs uppercase tracking-wider"
         }, "Loading..."),
 
-        // Categories
-        !loading && cats.map(cat => {
+        // Category sections
+        !loading && categories.map(cat => {
           const catTools = byCategory[cat.id] || [];
           if (!catTools.length) return null;
           return React.createElement("div", { key: cat.id, className: "flex flex-col gap-3" },
@@ -325,18 +304,20 @@
               React.createElement("span", { className: "text-[10px] px-1.5 py-0.5 rounded bg-muted" }, catTools.length)
             ),
             React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" },
-              catTools.map(t => React.createElement(ToolCard, {
-                key: t.tool_id,
-                tool: t,
-                health: healthMap[t.tool_id],
-                onAction: doAction
-              }))
+              catTools.map(t =>
+                React.createElement(ToolCard, {
+                  key: t.tool_id || t.id,
+                  tool: t,
+                  health: t,   // each tool object already IS the health result
+                  onAction: doAction
+                })
+              )
             )
           );
         })
       ),
 
-      // Modal overlay
+      // Modal
       React.createElement(ConfirmModal, {
         pendingAction,
         actionLoading,
@@ -347,6 +328,5 @@
     );
   }
 
-  // Register the plugin component
   register("ai-tool-portal", AiToolPortalPage);
 }());
