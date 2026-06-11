@@ -239,6 +239,53 @@ def rss_status(rss_mb: Optional[float], warn: Optional[float], maxv: Optional[fl
     return "ok"
 
 
+def self_test() -> dict:
+    """Run once on plugin import to validate the TOOLS list. Prints warnings
+    to stdout (visible in dashboard startup logs) for any misconfigurations
+    that would otherwise silently degrade the portal.
+    """
+    issues = []
+    stats = {"total": len(TOOLS), "with_thresholds": 0, "missing_thresholds": 0, "missing_pid": 0, "missing_action": 0}
+    for t in TOOLS:
+        tid = t.get("id", "?")
+        if not tid.replace("_", "").isalnum():
+            issues.append(f"  - {tid}: id must be alphanumeric+underscore only")
+        if not t.get("name"):
+            issues.append(f"  - {tid}: missing 'name'")
+        if not t.get("category"):
+            issues.append(f"  - {tid}: missing 'category'")
+        if not t.get("default_port"):
+            issues.append(f"  - {tid}: missing 'default_port'")
+        if t.get("rss_warn_mb") and t.get("rss_max_mb"):
+            stats["with_thresholds"] += 1
+            if t["rss_warn_mb"] >= t["rss_max_mb"]:
+                issues.append(f"  - {tid}: rss_warn_mb ({t['rss_warn_mb']}) >= rss_max_mb ({t['rss_max_mb']}) — reversed thresholds")
+        else:
+            stats["missing_thresholds"] += 1
+            issues.append(f"  - {tid}: missing rss_warn_mb/rss_max_mb — RAM will show as unknown (set both to 0 to skip explicitly)")
+        if not t.get("process_patterns") and t.get("id") != "n8n":
+            stats["missing_pid"] += 1
+            issues.append(f"  - {tid}: no process_patterns — will always show 'down' (only OK for container-only tools like n8n)")
+        # missing_action is informational only — manual-launch tools (ComfyUI etc.)
+        # legitimately have no service unit. Don't spam logs with 9 expected warnings.
+        if not (t.get("start_cmd") or t.get("stop_cmd") or t.get("restart_cmd")):
+            stats["missing_action"] += 1
+
+    print(f"[ai-tool-portal self-test] {stats['total']} tools configured, {stats['with_thresholds']} with RAM thresholds ({stats['missing_thresholds']} missing), {stats['missing_pid']} without PID pattern, {stats['missing_action']} without actions")
+    if issues:
+        print("[ai-tool-portal self-test] WARNINGS:")
+        for line in issues:
+            print(line)
+    else:
+        print("[ai-tool-portal self-test] OK — no issues found")
+
+    return {"stats": stats, "issues": issues}
+
+
+# Run self-test on import so the dashboard startup logs always show the result.
+self_test()
+
+
 def get_docker_container(ancestry_or_port: str, by_port: bool = False) -> Optional[dict]:
     """Lookup docker container by ancestry name OR publish port.
 
@@ -437,6 +484,13 @@ CHECKERS = {
 
 
 # ── API routes ───────────────────────────────────────────────────
+
+@router.get("/self_test")
+async def self_test_endpoint():
+    """Re-run plugin self-test. Returns stats + issues for any
+    misconfigured tool (missing thresholds, bad ids, etc.)."""
+    return self_test()
+
 
 @router.get("/tools")
 async def all_tools():
