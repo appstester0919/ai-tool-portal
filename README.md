@@ -2,6 +2,14 @@
 
 Hermes dashboard plugin for health monitoring + control of AI tools and long-running services.
 
+## Changelog
+
+| Version | Changes |
+|---|---|
+| v1.2 | n8n detection fixed (port-based, not ancestry); all 9 ComfyUI show down/not unknown; icon-only action buttons; status-color card borders |
+| v1.1 | Start/Stop/Restart with confirm modal |
+| v1.0 | Initial 14-tool health dashboard |
+
 ## Services (14 total)
 
 | Category | Tools |
