@@ -30,10 +30,12 @@
   }
 
   function StatusDot({ status }) {
-    // Color: green=up, yellow=warning, gray=down/unknown
-    // Add glow shadow + larger size for visibility at a glance
+    // Color: green=up, yellow=warning, red=crit (process up but RSS above max),
+    //        gray=down/unknown. Add glow shadow + larger size for visibility.
     const colors = {
       up:      { bg: "bg-green-500",  shadow: "shadow-[0_0_6px_rgba(34,197,94,0.7)]" },
+      warn:    { bg: "bg-yellow-500", shadow: "shadow-[0_0_6px_rgba(234,179,8,0.7)]" },
+      crit:    { bg: "bg-red-500",    shadow: "shadow-[0_0_6px_rgba(239,68,68,0.8)]" },
       warning: { bg: "bg-yellow-500", shadow: "shadow-[0_0_6px_rgba(234,179,8,0.7)]" },
       down:    { bg: "bg-gray-500",   shadow: "" },
       unknown: { bg: "bg-gray-500",   shadow: "" },
@@ -88,8 +90,23 @@
 
   function ToolCard({ tool, health, onAction }) {
     const status = health?.status || "down";
-    const borderCls = STATUS_BORDER[status] || STATUS_BORDER.down;
-    const badgeCls  = STATUS_BADGE[status]  || STATUS_BADGE.down;
+    const rssStatus = health?.rss_status || "unknown";
+    // Effective status for the dot:
+    //  - down/unknown: just show process status
+    //  - up: show rss_status so we surface RAM issues even when service is up
+    const effectiveDot = (status === "up" && rssStatus !== "unknown" && rssStatus !== "ok")
+      ? rssStatus
+      : status;
+    const borderCls = STATUS_BORDER[effectiveDot] || STATUS_BORDER.down;
+    const badgeCls  = STATUS_BADGE[effectiveDot]  || STATUS_BADGE.down;
+
+    // RSS value colour
+    const rssColor = {
+      ok: "text-green-500",
+      warn: "text-yellow-500",
+      crit: "text-red-500 font-semibold",
+      unknown: "",
+    }[rssStatus] || "";
 
     return React.createElement("div", {
       className: `flex flex-col gap-2 p-4 rounded-xl border bg-card text-card-foreground shadow-sm hover:border-primary/30 transition-colors ${borderCls}`
@@ -97,13 +114,13 @@
       // Header row
       React.createElement("div", { className: "flex items-center justify-between" },
         React.createElement("div", { className: "flex items-center gap-2 min-w-0" },
-          React.createElement(StatusDot, { status }),
+          React.createElement(StatusDot, { status: effectiveDot }),
           React.createElement("span", { className: "text-base" }, tool.icon || "⚙️"),
           React.createElement("span", { className: "font-semibold text-sm truncate" }, tool.name)
         ),
         React.createElement("span", {
           className: `text-[10px] px-1.5 py-0.5 rounded-full border uppercase tracking-wider font-medium ${badgeCls}`
-        }, status)
+        }, effectiveDot === "ok" ? "up" : (effectiveDot === "warn" ? "up-hi" : (effectiveDot === "crit" ? "up+ram" : effectiveDot)))
       ),
       // Meta grid
       React.createElement("div", { className: "grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]" },
@@ -118,7 +135,12 @@
         ),
         React.createElement("div", { className: "flex flex-col" },
           React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[9px]" }, "RSS"),
-          React.createElement("span", { className: `font-mono ${health?.rss_mb ? "" : "text-muted-foreground"}` },
+          React.createElement("span", {
+            className: `font-mono ${rssColor || (health?.rss_mb ? "" : "text-muted-foreground")}`,
+            title: health?.rss_warn_mb
+              ? `Normal < ${health.rss_warn_mb}MB · Warn ≥ ${health.rss_warn_mb}MB · Crit ≥ ${health.rss_max_mb}MB`
+              : "No threshold set"
+          },
             health?.rss_mb != null ? health.rss_mb.toFixed(1) + " MB" : "—")
         ),
         React.createElement("div", { className: "flex flex-col" },
@@ -278,8 +300,11 @@
     const healthMap = {};
     tools.forEach(t => { healthMap[t.tool_id || t.id] = t; });
 
-    const upCount   = tools.filter(t => t.status === "up").length;
+    // "Live" = process actually running (up + warn + crit — all means it's serving)
+    const upCount   = tools.filter(t => t.status === "up" || t.status === "warning" || t.status === "warn" || t.status === "crit").length;
     const totalCount = tools.length;
+    // True health: any of these is fine; down/unknown = problem
+    const healthyCount = tools.filter(t => t.status === "up" || t.status === "warning").length;
 
     // Group tools by category
     const byCategory = {};
@@ -297,7 +322,15 @@
           React.createElement("div", { className: "flex items-center gap-2" },
             React.createElement("span", { className: "font-bold text-sm uppercase tracking-wider" }, "AI Tool Portal"),
             React.createElement("span", { className: "text-xs text-muted-foreground" },
-              `${upCount}/${totalCount} up`)
+              `${upCount}/${totalCount} up`),
+            tools.filter(t => t.rss_status === "crit").length > 0 && React.createElement("span", {
+              className: "text-xs px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-500 border border-red-500/30 font-medium",
+              title: "Processes with RSS above their per-tool rss_max_mb"
+            }, `🔴 ${tools.filter(t => t.rss_status === "crit").length} RAM`),
+            tools.filter(t => t.rss_status === "warn").length > 0 && React.createElement("span", {
+              className: "text-xs px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500 border border-yellow-500/30 font-medium",
+              title: "Processes with RSS above their per-tool rss_warn_mb"
+            }, `🟡 ${tools.filter(t => t.rss_status === "warn").length} RAM`)
           ),
           React.createElement("div", { className: "flex items-center gap-3 text-xs text-muted-foreground" },
             lastUpdated && React.createElement("span", null, "Updated " + lastUpdated.toLocaleTimeString()),

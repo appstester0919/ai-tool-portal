@@ -21,6 +21,7 @@ TOOLS = [
      "version_pattern": r"OpenClaw\s+([0-9.]+)",
      "process_patterns": ["openclaw-gateway", "dist/index.js gateway --port"],
      "process_comm_filter": "node",
+     "rss_warn_mb": 800, "rss_max_mb": 1500,
      "start_cmd": "systemctl --user start openclaw-gateway",
      "stop_cmd": "systemctl --user stop openclaw-gateway",
      "restart_cmd": "systemctl --user restart openclaw-gateway"},
@@ -29,6 +30,7 @@ TOOLS = [
      "version_pattern": r"hermes\s+([0-9.]+)",
      "process_patterns": ["hermes_cli.main gateway"],
      "process_comm_filter": "python",
+     "rss_warn_mb": 200, "rss_max_mb": 400,
      "start_cmd": f"cd {HOME}/.hermes/hermes-agent && {HOME}/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main gateway run --replace",
      "stop_cmd": "pkill -f 'hermes_cli.main gateway'",
      "restart_cmd": "pkill -f 'hermes_cli.main gateway' && sleep 2"},
@@ -37,6 +39,7 @@ TOOLS = [
      "version_pattern": r"hermes\s+([0-9.]+)",
      "process_patterns": ["hermes dashboard"],
      "process_comm_filter": "python",
+     "rss_warn_mb": 300, "rss_max_mb": 600,
      "start_cmd": "hermes dashboard --port 9119",
      "stop_cmd": "pkill -f 'hermes dashboard'",
      "restart_cmd": "pkill -f 'hermes dashboard' && sleep 2"},
@@ -45,6 +48,7 @@ TOOLS = [
      "version_cmd": ["n8n", "--version"],
      "version_pattern": r"([0-9.]+)",
      "process_patterns": [],
+     "rss_warn_mb": 1024, "rss_max_mb": 2048,
      "start_cmd": "cd /mnt/d/Docker && docker compose -f n8n-restored.yml up -d",
      "stop_cmd": "cd /mnt/d/Docker && docker compose -f n8n-restored.yml down",
      "restart_cmd": "cd /mnt/d/Docker && docker compose -f n8n-restored.yml restart"},
@@ -52,6 +56,7 @@ TOOLS = [
      "default_port": 5000, "version_pattern": r"v([0-9.]+)",
      "process_patterns": ["prayer_server_v3"],
      "process_comm_filter": "python",
+     "rss_warn_mb": 150, "rss_max_mb": 300,
      "start_cmd": f"cd {HOME}/.hermes/scripts && nohup {HOME}/.hermes/hermes-agent/venv/bin/python prayer_server_v3.py > {HOME}/.hermes/logs/prayer_server.log 2>&1 &",
      "stop_cmd": "pkill -f 'prayer_server_v3'",
      "restart_cmd": "pkill -f 'prayer_server_v3' && sleep 2"},
@@ -59,46 +64,55 @@ TOOLS = [
      "dir": str(DRIVE_AI / "ComfyUI_3D"),
      "default_port": 8190, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
      "process_patterns": ["ComfyUI_3D"],
-     "process_comm_filter": "python"},
+     "process_comm_filter": "python",
+     "rss_warn_mb": 4000, "rss_max_mb": 8000},
     {"id": "comfyui_ideogram", "name": "ComfyUI — Ideogram", "category": "ai_image", "icon": "Image",
      "dir": str(DRIVE_AI / "ComfyUI_Ideogram"),
      "default_port": 8194, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
      "process_patterns": ["ComfyUI_Ideogram"],
-     "process_comm_filter": "python"},
+     "process_comm_filter": "python",
+     "rss_warn_mb": 4000, "rss_max_mb": 8000},
     {"id": "comfyui_ltx", "name": "ComfyUI — LTX Video", "category": "ai_video", "icon": "Video",
      "dir": str(DRIVE_AI / "ComfyUI_LTX"),
      "default_port": 8183, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
      "process_patterns": ["ComfyUI_LTX"],
-     "process_comm_filter": "python"},
+     "process_comm_filter": "python",
+     "rss_warn_mb": 6000, "rss_max_mb": 12000},
     {"id": "comfyui_heartmula", "name": "ComfyUI — Heartmula", "category": "ai_audio", "icon": "Music",
      "dir": str(DRIVE_AI / "ComfyUI_Heartmula"),
      "default_port": 8189, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
      "process_patterns": ["ComfyUI_Heartmula"],
-     "process_comm_filter": "python"},
+     "process_comm_filter": "python",
+     "rss_warn_mb": 4000, "rss_max_mb": 8000},
     {"id": "comfyui_krita", "name": "ComfyUI — Krita", "category": "ai_image", "icon": "Image",
      "dir": str(DRIVE_AI / "ComfyUI_Krita"),
      "default_port": 8192, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
      "process_patterns": ["ComfyUI_Krita"],
-     "process_comm_filter": "python"},
+     "process_comm_filter": "python",
+     "rss_warn_mb": 4000, "rss_max_mb": 8000},
     {"id": "comfyui_standard", "name": "ComfyUI — Standard", "category": "ai_image", "icon": "Image",
      "dir": str(DRIVE_AI / "ComfyUI_Standard"),
      "default_port": 8188, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
      "process_patterns": ["ComfyUI_Standard"],
-     "process_comm_filter": "python"},
+     "process_comm_filter": "python",
+     "rss_warn_mb": 4000, "rss_max_mb": 8000},
     {"id": "comfyui_qwen3tts", "name": "ComfyUI — Qwen3-TTS", "category": "ai_audio", "icon": "Music",
      "dir": str(DRIVE_AI / "ComfyUI_Qwen3-TTS"),
      "default_port": 8189, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
      "process_patterns": ["ComfyUI_Qwen3-TTS"],
-     "process_comm_filter": "python"},
+     "process_comm_filter": "python",
+     "rss_warn_mb": 4000, "rss_max_mb": 8000},
     {"id": "comfyui_win_data", "name": "ComfyUI — win_data", "category": "ai_image", "icon": "Image",
      "dir": str(DRIVE_AI / "ComfyUI_win_data"),
      "default_port": 8186, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
-     "process_patterns": ["ComfyUI_win_data"]},
+     "process_patterns": ["ComfyUI_win_data"],
+     "rss_warn_mb": 4000, "rss_max_mb": 8000},
     {"id": "comfyui_documents", "name": "ComfyUI — Documents", "category": "ai_image", "icon": "Image",
      "dir": str(DRIVE_AI / "ComfyUI_Documents"),
      "default_port": 8191, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
      "process_patterns": ["ComfyUI_Documents"],
-     "process_comm_filter": "python"},
+     "process_comm_filter": "python",
+     "rss_warn_mb": 4000, "rss_max_mb": 8000},
 ]
 
 CATEGORIES = [
@@ -207,6 +221,24 @@ def parse_version(stdout: str, pattern: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def rss_status(rss_mb: Optional[float], warn: Optional[float], maxv: Optional[float]) -> str:
+    """Classify actual RSS against per-tool thresholds.
+
+    Returns one of: "unknown" (no thresholds or no reading),
+                    "ok"     (within warn),
+                    "warn"   (above warn but below max),
+                    "crit"   (above max — process likely leaking or model loaded too big).
+    Thresholds are set in TOOLS[*].rss_warn_mb / rss_max_mb.
+    """
+    if rss_mb is None or not warn or not maxv:
+        return "unknown"
+    if rss_mb >= maxv:
+        return "crit"
+    if rss_mb >= warn:
+        return "warn"
+    return "ok"
+
+
 def get_docker_container(ancestry_or_port: str, by_port: bool = False) -> Optional[dict]:
     """Lookup docker container by ancestry name OR publish port.
 
@@ -259,6 +291,9 @@ def check_openclaw(tool: dict) -> dict:
         "port_listening": listening,
         "pid": proc["pid"] if proc else None,
         "rss_mb": rss,
+        "rss_status": rss_status(rss, tool.get("rss_warn_mb"), tool.get("rss_max_mb")),
+        "rss_warn_mb": tool.get("rss_warn_mb"),
+        "rss_max_mb": tool.get("rss_max_mb"),
         "uptime_s": uptime,
         "version": version,
         "checked_at": now_iso(),
@@ -288,6 +323,9 @@ def check_hermes_gateway(tool: dict) -> dict:
         "port_listening": listening,
         "pid": proc["pid"] if proc else None,
         "rss_mb": rss,
+        "rss_status": rss_status(rss, tool.get("rss_warn_mb"), tool.get("rss_max_mb")),
+        "rss_warn_mb": tool.get("rss_warn_mb"),
+        "rss_max_mb": tool.get("rss_max_mb"),
         "uptime_s": uptime,
         "version": version,
         "checked_at": now_iso(),
@@ -341,6 +379,9 @@ def check_prayer_server(tool: dict) -> dict:
         "port_listening": listening,
         "pid": proc["pid"] if proc else None,
         "rss_mb": rss,
+        "rss_status": rss_status(rss, tool.get("rss_warn_mb"), tool.get("rss_max_mb")),
+        "rss_warn_mb": tool.get("rss_warn_mb"),
+        "rss_max_mb": tool.get("rss_max_mb"),
         "uptime_s": uptime,
         "checked_at": now_iso(),
     }
@@ -368,6 +409,9 @@ def check_comfyui(tool: dict) -> dict:
         "port_listening": listening,
         "pid": proc["pid"] if proc else None,
         "rss_mb": rss,
+        "rss_status": rss_status(rss, tool.get("rss_warn_mb"), tool.get("rss_max_mb")),
+        "rss_warn_mb": tool.get("rss_warn_mb"),
+        "rss_max_mb": tool.get("rss_max_mb"),
         "uptime_s": uptime,
         "checked_at": now_iso(),
     }
