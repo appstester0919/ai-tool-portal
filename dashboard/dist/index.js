@@ -1,205 +1,187 @@
+/* eslint-disable */
+/**
+ * AI Tool Portal — Dashboard Plugin
+ *
+ * Health dashboard for all AI tools and long-running services.
+ * Calls /api/plugins/ai-tool-portal/tools for the full tool list + live health.
+ * Auto-refresh every 30s.
+ *
+ * Plain IIFE, no build step. Uses window.__HERMES_PLUGIN_SDK__ for React.
+ */
+(function () {
+  "use strict";
 
-const API = '/api/plugins/ai-tool-portal';
-let tools = [];
-let healthCache = {};
-let pendingAction = null;
-let refreshTimer = null;
-
-// ── Fetch ───────────────────────────────────────────────────────
-
-async function fetchAll() {
-  showLoading(true);
-  hideError();
-  try {
-    const [toolsRes, healthRes] = await Promise.all([
-      fetch(`${API}/tools`),
-      Promise.all(tools.map(t => fetch(`${API}/tools/${t.id}/health`).then(r => r.json()).catch(() => ({tool_id: t.id, status: 'down', port_listening: false, pid: null, rss_mb: null, uptime_s: null, version: null}))))
-    ]);
-    if (!toolsRes.ok) throw new Error(`HTTP ${toolsRes.status}`);
-    tools = await toolsRes.json();
-    healthCache = {};
-    healthRes.forEach(h => { healthCache[h.tool_id] = h; });
-    render();
-    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
-  } catch(err) {
-    showError('Failed to load: ' + err.message);
-  } finally {
-    showLoading(false);
-  }
-}
-
-function showLoading(v) {
-  document.getElementById('loading-spinner').style.display = v ? 'inline-block' : 'none';
-  document.getElementById('refresh-btn').disabled = v;
-}
-
-// ── Render ──────────────────────────────────────────────────────
-
-function render() {
-  const running = tools.filter(t => healthCache[t.id]?.status === 'up' || healthCache[t.id]?.status === 'warning');
-  const stopped = tools.filter(t => healthCache[t.id]?.status === 'down');
-  const totalUp = running.filter(t => healthCache[t.id]?.status === 'up').length;
-
-  document.getElementById('total-badge').textContent = `${totalUp}/${tools.length} up`;
-
-  const sectionsEl = document.getElementById('sections');
-  sectionsEl.innerHTML = '';
-
-  if (running.length) {
-    sectionsEl.appendChild(makeSection('running', `Running (${running.length})`, running));
-  }
-  if (stopped.length) {
-    sectionsEl.appendChild(makeSection('stopped', `Stopped (${stopped.length})`, stopped));
-  }
-}
-
-function makeSection(id, label, toolList) {
-  const section = document.createElement('div');
-  const header = document.createElement('div');
-  header.className = 'section-header';
-  header.onclick = () => {
-    const body = section.querySelector('.section-body');
-    const isCollapsed = body.classList.toggle('collapsed');
-    header.classList.toggle('collapsed', isCollapsed);
-  };
-  header.innerHTML = `<span>▼</span> ${label} <span class="count">${toolList.length}</span>`;
-
-  const body = document.createElement('div');
-  body.className = 'section-body';
-  toolList.forEach(t => body.appendChild(makeCard(t)));
-
-  section.appendChild(header);
-  section.appendChild(body);
-  return section;
-}
-
-function makeCard(tool) {
-  const h = healthCache[tool.id] || {};
-  const status = h.status || 'down';
-  const portOk = h.port_listening;
-  const isRunning = status === 'up' || status === 'warning';
-
-  const card = document.createElement('div');
-  card.className = `card ${status}`;
-  card.id = `card-${tool.id}`;
-
-  const metaItems = [
-    { label: 'Port', value: tool.default_port, show: true },
-    { label: 'PID', value: h.pid || '—', show: true },
-    { label: 'RSS', value: h.rss_mb != null ? h.rss_mb.toFixed(1) + ' MB' : '—', show: isRunning },
-    { label: 'Uptime', value: fmtUptime(h.uptime_s), show: isRunning },
-    { label: 'Version', value: h.version || '—', show: true },
-  ];
-
-  const version = h.version ? `<div class="meta-item"><div class="meta-label">Version</div><div class="meta-value ${h.version ? '' : 'empty'}">${h.version || '—'}</div></div>` : '';
-  const uptimeStr = h.uptime_s != null ? fmtUptime(h.uptime_s) : '—';
-  const rssStr = h.rss_mb != null ? h.rss_mb.toFixed(1) + ' MB' : '—';
-  const pidStr = h.pid || '—';
-
-  card.innerHTML = `
-    <div class="card-header">
-      <span class="card-icon">${tool.icon || '⚙️'}</span>
-      <span class="card-name">${tool.name}</span>
-      <span class="status-badge ${status}">${status}</span>
-    </div>
-    <div class="card-meta">
-      <div class="meta-item"><div class="meta-label">Port</div><div class="meta-value">${tool.default_port}</div></div>
-      <div class="meta-item"><div class="meta-label">PID</div><div class="meta-value ${pidStr === '—' ? 'empty' : ''}">${pidStr}</div></div>
-      <div class="meta-item"><div class="meta-label">RSS</div><div class="meta-value ${rssStr === '—' ? 'empty' : ''}">${rssStr}</div></div>
-      <div class="meta-item"><div class="meta-label">Uptime</div><div class="meta-value ${uptimeStr === '—' ? 'empty' : ''}">${uptimeStr}</div></div>
-    </div>
-    <div class="card-footer" id="actions-${tool.id}">
-      <button class="btn-sm start" onclick="doAction('${tool.id}', 'start')" ${isRunning ? 'disabled' : ''}>▶ Start</button>
-      <button class="btn-sm stop" onclick="doAction('${tool.id}', 'stop')" ${isRunning ? '' : 'disabled'}>■ Stop</button>
-      <button class="btn-sm" onclick="doAction('${tool.id}', 'restart')" ${isRunning ? '' : 'disabled'}>↻ Restart</button>
-    </div>
-  `;
-  return card;
-}
-
-function fmtUptime(s) {
-  if (s == null || s < 0) return '—';
-  if (s < 60) return s + 's';
-  if (s < 3600) return Math.floor(s/60) + 'm';
-  if (s < 86400) return (s/3600).toFixed(1) + 'h';
-  return (s/86400).toFixed(1) + 'd';
-}
-
-// ── Actions ─────────────────────────────────────────────────────
-
-function doAction(toolId, action) {
-  const tool = tools.find(t => t.id === toolId);
-  if (!tool) return;
-  pendingAction = { toolId, action, tool };
-  openModal(tool, action);
-}
-
-function openModal(tool, action) {
-  const warnings = {
-    start: `Start ${tool.name}?`,
-    stop: `Stop ${tool.name}? This may interrupt active workflows.`,
-    restart: `Restart ${tool.name}? This will briefly disconnect all active sessions.`
-  };
-  document.getElementById('modal-title').textContent = warnings[action] || `${action} ${tool.name}?`;
-  document.getElementById('modal-body').textContent = 'Click Confirm to proceed.';
-  document.getElementById('modal').style.display = 'flex';
-  document.getElementById('modal-confirm-btn').textContent = action === 'restart' ? 'Yes, restart' : 'Confirm';
-}
-
-function closeModal() {
-  document.getElementById('modal').style.display = 'none';
-  pendingAction = null;
-}
-
-async function confirmAction() {
-  if (!pendingAction) return;
-  const { toolId, action, tool } = pendingAction;
-  closeModal();
-
-  // Disable buttons during action
-  const actionsEl = document.getElementById(`actions-${toolId}`);
-  if (actionsEl) {
-    actionsEl.querySelectorAll('button').forEach(b => b.disabled = true);
+  const SDK = window.__HERMES_PLUGIN_SDK__;
+  const register = window.__HERMES_PLUGINS__?.register;
+  if (!SDK && !register) {
+    return;
   }
 
-  try {
-    const res = await fetch(`${API}/tools/${toolId}/action`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, confirm: true })
+  const React = SDK.React;
+  const { useState, useEffect, useCallback } = SDK.hooks;
+
+  // ── Helpers ────────────────────────────────────────────────────
+
+  function fmtUptime(s) {
+    if (s == null || s < 0) return "—";
+    if (s < 60) return s + "s";
+    if (s < 3600) return Math.floor(s / 60) + "m";
+    if (s < 86400) return (s / 3600).toFixed(1) + "h";
+    return (s / 86400).toFixed(1) + "d";
+  }
+
+  function StatusDot({ status }) {
+    const colors = {
+      up: "bg-green-500",
+      warning: "bg-yellow-500",
+      down: "bg-gray-400",
+      unknown: "bg-gray-400",
+    };
+    const cls = colors[status] || colors.unknown;
+    return React.createElement("span", { className: `inline-block h-2 w-2 rounded-full ${cls}` });
+  }
+
+  // ── Tool Card ──────────────────────────────────────────────────
+
+  function ToolCard({ tool, health }) {
+    const status = health?.status || "down";
+    const isRunning = status === "up" || status === "warning";
+
+    const statusBadgeCls = {
+      up: "bg-green-500/10 text-green-500 border-green-500/20",
+      warning: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+      down: "bg-gray-500/10 text-gray-400 border-gray-500/20",
+      unknown: "bg-gray-500/10 text-gray-400 border-gray-500/20",
+    }[status] || statusBadgeCls.down;
+
+    return React.createElement("div", {
+      className: `flex flex-col gap-3 p-4 rounded-xl border bg-card text-card-foreground shadow-sm hover:border-primary/30 transition-colors`,
+    },
+      // Header
+      React.createElement("div", { className: "flex items-center justify-between" },
+        React.createElement("div", { className: "flex items-center gap-2" },
+          React.createElement("span", { className: "text-lg" }, tool.icon || "⚙️"),
+          React.createElement("span", { className: "font-semibold text-sm" }, tool.name)
+        ),
+        React.createElement("span", {
+          className: `text-xs px-2 py-0.5 rounded-full border uppercase tracking-wider font-medium ${statusBadgeCls}`
+        }, status)
+      ),
+      // Meta grid
+      React.createElement("div", { className: "grid grid-cols-2 gap-x-4 gap-y-1 text-xs" },
+        React.createElement("div", { className: "flex flex-col" },
+          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[10px]" }, "Port"),
+          React.createElement("span", { className: "font-mono" }, tool.default_port)
+        ),
+        React.createElement("div", { className: "flex flex-col" },
+          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[10px]" }, "PID"),
+          React.createElement("span", { className: `font-mono ${health?.pid ? "" : "text-muted-foreground"}` }, health?.pid || "—")
+        ),
+        React.createElement("div", { className: "flex flex-col" },
+          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[10px]" }, "RSS"),
+          React.createElement("span", { className: `font-mono ${health?.rss_mb ? "" : "text-muted-foreground"}` },
+            health?.rss_mb != null ? health.rss_mb.toFixed(1) + " MB" : "—")
+        ),
+        React.createElement("div", { className: "flex flex-col" },
+          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[10px]" }, "Uptime"),
+          React.createElement("span", { className: `font-mono ${health?.uptime_s != null ? "" : "text-muted-foreground"}` },
+            fmtUptime(health?.uptime_s))
+        )
+      )
+    );
+  }
+
+  // ── Main Page ──────────────────────────────────────────────────
+
+  function AiToolPortalPage() {
+    const [tools, setTools] = useState([]);
+    const [healthMap, setHealthMap] = useState({});
+    const [categories, setCategories] = useState([]);
+    const [lastUpdated, setLastUpdated] = useState(null);
+    const [error, setError] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    const fetchData = useCallback(async () => {
+      try {
+        const json = await SDK.fetchJSON("/api/plugins/ai-tool-portal/tools");
+        setTools(json.tools || []);
+        const map = {};
+        (json.tools || []).forEach(t => { map[t.tool_id] = t; });
+        setHealthMap(map);
+        setCategories(json.categories || []);
+        setError(null);
+        setLastUpdated(new Date());
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    }, []);
+
+    useEffect(() => {
+      fetchData();
+      const id = setInterval(fetchData, 30000);
+      return () => clearInterval(id);
+    }, [fetchData]);
+
+    const upCount = tools.filter(t => healthMap[t.tool_id]?.status === "up").length;
+    const totalCount = tools.length;
+
+    // Group by category
+    const cats = categories.length ? categories : [];
+    const byCategory = {};
+    cats.forEach(c => { byCategory[c.id] = []; });
+    tools.forEach(t => {
+      const cat = t.category || "other";
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(t);
     });
-    const result = await res.json();
-    showToast(result.ok ? `✅ ${tool.name} ${action}ed` : `❌ ${result.stderr || 'Action failed'}`, result.ok ? 'ok' : 'err');
-    // Refresh after 2s
-    setTimeout(fetchAll, 2000);
-  } catch(e) {
-    showToast(`❌ ${e.message}`, 'err');
+
+    return React.createElement("div", { className: "flex flex-col gap-5 p-5" },
+      // Header
+      React.createElement("div", { className: "flex items-center justify-between" },
+        React.createElement("div", { className: "flex items-center gap-2" },
+          React.createElement("span", { className: "font-bold text-sm uppercase tracking-wider" }, "AI Tool Portal"),
+          React.createElement("span", { className: "text-xs text-muted-foreground" },
+            `${upCount}/${totalCount} up`
+          )
+        ),
+        React.createElement("div", { className: "flex items-center gap-3 text-xs text-muted-foreground" },
+          lastUpdated && React.createElement("span", null, "Updated " + lastUpdated.toLocaleTimeString()),
+          React.createElement("button", {
+            onClick: fetchData,
+            className: "px-3 py-1.5 border border-border rounded-md text-xs hover:bg-muted transition-colors uppercase tracking-wider"
+          }, "↻ Refresh")
+        )
+      ),
+
+      // Error
+      error && React.createElement("div", {
+        className: "p-3 border border-red-500/30 bg-red-500/10 rounded-lg text-xs text-red-500 font-mono"
+      }, "Failed to load: " + error),
+
+      // Loading
+      loading && !tools.length && React.createElement("div", {
+        className: "flex items-center justify-center py-12 text-muted-foreground text-xs uppercase tracking-wider"
+      }, "Loading..."),
+
+      // Categories
+      !loading && cats.map(cat => {
+        const catTools = byCategory[cat.id] || [];
+        if (!catTools.length) return null;
+        return React.createElement("div", { key: cat.id, className: "flex flex-col gap-3" },
+          React.createElement("div", { className: "flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground font-medium border-b border-border pb-1" },
+            React.createElement("span", null, cat.label || cat.id),
+            React.createElement("span", { className: "text-[10px] px-1.5 py-0.5 rounded bg-muted" }, catTools.length)
+          ),
+          React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" },
+            catTools.map(t => React.createElement(ToolCard, { key: t.tool_id, tool: t, health: healthMap[t.tool_id] }))
+          )
+        );
+      })
+    );
   }
-}
 
-function showToast(msg, type='ok') {
-  const existing = document.querySelector('.toast');
-  if (existing) existing.remove();
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.textContent = msg;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 5000);
-}
-
-function showError(msg) {
-  const el = document.getElementById('error-box');
-  el.textContent = msg;
-  el.style.display = 'block';
-}
-function hideError() {
-  document.getElementById('error-box').style.display = 'none';
-}
-
-// ── Init ─────────────────────────────────────────────────────────
-
-fetchAll().then(() => {
-  // 30s auto-refresh
-  if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(fetchAll, 30000);
-});
+  // Register the plugin component
+  register("ai-tool-portal", AiToolPortalPage);
+}());

@@ -10,10 +10,110 @@ from typing import Optional
 
 from fastapi import APIRouter
 
-import tools_registry
-TOOLS = tools_registry.TOOLS
-CATEGORIES = tools_registry.CATEGORIES
-get_tool = tools_registry.get_tool
+# ── Inline tool registry (avoids dynamic import path issues) ──────────────────
+
+HOME = Path.home()
+DRIVE_AI = Path("/mnt/d/AI")
+
+TOOLS = [
+    {"id": "openclaw", "name": "OpenClaw", "category": "gateway", "icon": "Bot",
+     "default_port": 18789, "version_cmd": ["openclaw", "--version"],
+     "version_pattern": r"OpenClaw\s+([0-9.]+)",
+     "process_patterns": ["openclaw-gateway", "dist/index.js gateway --port"],
+     "process_comm_filter": "node",
+     "start_cmd": "systemctl --user start openclaw-gateway",
+     "stop_cmd": "systemctl --user stop openclaw-gateway",
+     "restart_cmd": "systemctl --user restart openclaw-gateway"},
+    {"id": "hermes_gateway", "name": "Hermes Gateway", "category": "gateway", "icon": "Gateway",
+     "default_port": 9119, "version_cmd": ["hermes", "--version"],
+     "version_pattern": r"hermes\s+([0-9.]+)",
+     "process_patterns": ["hermes_cli.main gateway"],
+     "process_comm_filter": "python",
+     "start_cmd": f"cd {HOME}/.hermes/hermes-agent && {HOME}/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main gateway run --replace",
+     "stop_cmd": "pkill -f 'hermes_cli.main gateway'",
+     "restart_cmd": "pkill -f 'hermes_cli.main gateway' && sleep 2"},
+    {"id": "hermes_dashboard", "name": "Hermes Dashboard", "category": "gateway", "icon": "LayoutDashboard",
+     "default_port": 9119, "version_cmd": ["hermes", "--version"],
+     "version_pattern": r"hermes\s+([0-9.]+)",
+     "process_patterns": ["hermes dashboard"],
+     "process_comm_filter": "python",
+     "start_cmd": "hermes dashboard --port 9119",
+     "stop_cmd": "pkill -f 'hermes dashboard'",
+     "restart_cmd": "pkill -f 'hermes dashboard' && sleep 2"},
+    {"id": "n8n", "name": "n8n", "category": "workflow", "icon": "Workflow",
+     "default_port": 5678, "version_cmd": ["n8n", "--version"],
+     "version_pattern": r"([0-9.]+)",
+     "process_patterns": [],
+     "docker_ancestry": "n8nio/n8n",
+     "start_cmd": "cd /mnt/d/Docker && docker compose -f n8n-restored.yml up -d",
+     "stop_cmd": "cd /mnt/d/Docker && docker compose -f n8n-restored.yml down",
+     "restart_cmd": "cd /mnt/d/Docker && docker compose -f n8n-restored.yml restart"},
+    {"id": "prayer_server", "name": "Prayer Pipeline v3", "category": "scheduler", "icon": "Prayer",
+     "default_port": 5000, "version_pattern": r"v([0-9.]+)",
+     "process_patterns": ["prayer_server_v3"],
+     "process_comm_filter": "python",
+     "start_cmd": f"cd {HOME}/.hermes/scripts && nohup {HOME}/.hermes/hermes-agent/venv/bin/python prayer_server_v3.py > {HOME}/.hermes/logs/prayer_server.log 2>&1 &",
+     "stop_cmd": "pkill -f 'prayer_server_v3'",
+     "restart_cmd": "pkill -f 'prayer_server_v3' && sleep 2"},
+    {"id": "comfyui_3d", "name": "ComfyUI — 3D", "category": "ai_image", "icon": "Image",
+     "dir": str(DRIVE_AI / "ComfyUI_3D"),
+     "default_port": 8190, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
+     "process_patterns": ["ComfyUI_3D"],
+     "process_comm_filter": "python"},
+    {"id": "comfyui_ideogram", "name": "ComfyUI — Ideogram", "category": "ai_image", "icon": "Image",
+     "dir": str(DRIVE_AI / "ComfyUI_Ideogram"),
+     "default_port": 8194, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
+     "process_patterns": ["ComfyUI_Ideogram"],
+     "process_comm_filter": "python"},
+    {"id": "comfyui_ltx", "name": "ComfyUI — LTX Video", "category": "ai_video", "icon": "Video",
+     "dir": str(DRIVE_AI / "ComfyUI_LTX"),
+     "default_port": 8183, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
+     "process_patterns": ["ComfyUI_LTX"],
+     "process_comm_filter": "python"},
+    {"id": "comfyui_heartmula", "name": "ComfyUI — Heartmula", "category": "ai_audio", "icon": "Music",
+     "dir": str(DRIVE_AI / "ComfyUI_Heartmula"),
+     "default_port": 8189, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
+     "process_patterns": ["ComfyUI_Heartmula"],
+     "process_comm_filter": "python"},
+    {"id": "comfyui_krita", "name": "ComfyUI — Krita", "category": "ai_image", "icon": "Image",
+     "dir": str(DRIVE_AI / "ComfyUI_Krita"),
+     "default_port": 8192, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
+     "process_patterns": ["ComfyUI_Krita"],
+     "process_comm_filter": "python"},
+    {"id": "comfyui_standard", "name": "ComfyUI — Standard", "category": "ai_image", "icon": "Image",
+     "dir": str(DRIVE_AI / "ComfyUI_Standard"),
+     "default_port": 8188, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
+     "process_patterns": ["ComfyUI_Standard"],
+     "process_comm_filter": "python"},
+    {"id": "comfyui_qwen3tts", "name": "ComfyUI — Qwen3-TTS", "category": "ai_audio", "icon": "Music",
+     "dir": str(DRIVE_AI / "ComfyUI_Qwen3-TTS"),
+     "default_port": 8189, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
+     "process_patterns": ["ComfyUI_Qwen3-TTS"],
+     "process_comm_filter": "python"},
+    {"id": "comfyui_win_data", "name": "ComfyUI — win_data", "category": "ai_image", "icon": "Image",
+     "dir": str(DRIVE_AI / "ComfyUI_win_data"),
+     "default_port": 8186, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
+     "process_patterns": ["ComfyUI_win_data"]},
+    {"id": "comfyui_documents", "name": "ComfyUI — Documents", "category": "ai_image", "icon": "Image",
+     "dir": str(DRIVE_AI / "ComfyUI_Documents"),
+     "default_port": 8191, "version_pattern": r"ComfyUI[_\s]([0-9.]+)",
+     "process_patterns": ["ComfyUI_Documents"],
+     "process_comm_filter": "python"},
+]
+
+CATEGORIES = [
+    {"id": "gateway", "label": "Gateways", "icon": "Gateway"},
+    {"id": "workflow", "label": "Workflow Engines", "icon": "Workflow"},
+    {"id": "scheduler", "label": "Schedulers", "icon": "Clock"},
+    {"id": "ai_image", "label": "AI Image", "icon": "Image"},
+    {"id": "ai_video", "label": "AI Video", "icon": "Video"},
+    {"id": "ai_audio", "label": "AI Audio", "icon": "Music"},
+]
+
+
+def get_tool(id: str):
+    return next((t for t in TOOLS if t["id"] == id), None)
+
 
 router = APIRouter()
 
@@ -27,6 +127,8 @@ def run_cmd(cmd: list[str], timeout_s: int = 10) -> tuple[str, str, int]:
         return r.stdout, r.stderr, r.returncode
     except subprocess.TimeoutExpired:
         return "", f"timeout after {timeout_s}s", 124
+    except Exception as e:
+        return "", str(e), 1
 
 
 def now_iso() -> str:
@@ -44,7 +146,6 @@ def get_proc_by_patterns(patterns: list[str], comm_filter: Optional[str] = None)
                 continue
             try:
                 pid = int(line.split()[0])
-                # Filter by comm
                 comm_path = f"/proc/{pid}/comm"
                 try:
                     comm = open(comm_path).read().strip()
@@ -95,7 +196,6 @@ def get_docker_container(ancestry: str) -> Optional[dict]:
     if rc != 0 or not out.strip():
         return None
     cid = out.strip()
-    # Get stats
     stats_out, _, _ = run_cmd(["docker", "stats", "--no-stream", "--format", "{{.CPUPerc}}|{{.MemUsage}}", cid])
     if stats_out.strip():
         parts = stats_out.strip().split("|")
@@ -119,8 +219,9 @@ def check_openclaw(tool: dict) -> dict:
         info = get_proc_info(proc["pid"])
         rss = round(info["rss_kb"] / 1024, 1) if info["rss_kb"] else None
         uptime = info["uptime_s"]
-    out, _, _ = run_cmd(tool["version_cmd"])
-    version = parse_version(out, tool["version_pattern"])
+    if tool.get("version_cmd"):
+        out, _, _ = run_cmd(tool["version_cmd"])
+        version = parse_version(out, tool["version_pattern"])
     return {
         "tool_id": tool["id"],
         "name": tool["name"],
@@ -147,8 +248,9 @@ def check_hermes_gateway(tool: dict) -> dict:
         info = get_proc_info(proc["pid"])
         rss = round(info["rss_kb"] / 1024, 1) if info["rss_kb"] else None
         uptime = info["uptime_s"]
-    out, _, _ = run_cmd(tool["version_cmd"])
-    version = parse_version(out, tool["version_pattern"])
+    if tool.get("version_cmd"):
+        out, _, _ = run_cmd(tool["version_cmd"])
+        version = parse_version(out, tool["version_pattern"])
     return {
         "tool_id": tool["id"],
         "name": tool["name"],
@@ -173,8 +275,9 @@ def check_n8n(tool: dict) -> dict:
     else:
         status = "down"
     version = None
-    out, _, _ = run_cmd(tool["version_cmd"])
-    version = parse_version(out, tool["version_pattern"])
+    if tool.get("version_cmd"):
+        out, _, _ = run_cmd(tool["version_cmd"])
+        version = parse_version(out, tool["version_pattern"])
     return {
         "tool_id": tool["id"],
         "name": tool["name"],
@@ -230,7 +333,7 @@ CHECKERS = {
 
 @router.get("/tools")
 async def all_tools():
-    """Return all tools with last-known health (no live probe here)."""
+    """Return all tools with live health checks."""
     summaries = []
     for tool in TOOLS:
         checker = CHECKERS.get(tool["id"])

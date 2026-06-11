@@ -131,12 +131,15 @@ async function fetchAll() {
   showLoading(true);
   hideError();
   try {
-    const [toolsRes, healthRes] = await Promise.all([
-      fetch(`${API}/tools`),
-      Promise.all(tools.map(t => fetch(`${API}/tools/${t.id}/health`).then(r => r.json()).catch(() => ({tool_id: t.id, status: 'down', port_listening: false, pid: null, rss_mb: null, uptime_s: null, version: null}))))
-    ]);
+    const toolsRes = await fetch(`${API}/tools`);
     if (!toolsRes.ok) throw new Error(`HTTP ${toolsRes.status}`);
-    tools = await toolsRes.json();
+    const fetchedTools = await toolsRes.json();
+
+    const healthRes = await Promise.all(
+      fetchedTools.map(t => fetch(`${API}/tools/${t.id}/health`).then(r => r.json()).catch(() => ({tool_id: t.id, status: 'down', port_listening: false, pid: null, rss_mb: null, uptime_s: null, version: null})))
+    );
+
+    tools = fetchedTools;
     healthCache = {};
     healthRes.forEach(h => { healthCache[h.tool_id] = h; });
     render();
