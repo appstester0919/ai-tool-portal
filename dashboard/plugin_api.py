@@ -3,7 +3,7 @@ AI Tool Portal — v0.3
 Backend API with health checks for 14 tools.
 v0.3: fixed n8n detection (port-based), added ComfyUI generic checker.
 """
-import subprocess, re, json, sys, time
+import subprocess, re, json, sys, time, os
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
@@ -157,19 +157,40 @@ def get_proc_by_patterns(patterns: list[str], comm_filter: Optional[str] = None)
 
 
 def get_proc_info(pid: int) -> dict:
-    """Read RSS (KB) and uptime (s) from /proc/$pid."""
+    """Read RSS (KB) and uptime (s) from /proc/$pid.
+    
+    Uptime calculation: /proc/uptime gives system uptime in seconds.
+    starttime from /proc/[pid]/stat is in clock ticks since boot.
+    Correct formula: uptime - (starttime / CLK_TCK)
+    CLK_TCK on Linux is usually 100.
+    """
     info = {"pid": pid, "rss_kb": None, "uptime_s": None}
     try:
         status = open(f"/proc/{pid}/status").read()
         m = re.search(r"VmRSS:\s+(\d+)\s+kB", status)
         if m:
             info["rss_kb"] = int(m.group(1))
-        stat = open(f"/proc/{pid}/stat").read().split()
-        if len(stat) >= 22:
-            starttime = float(stat[22])
+        
+        # Parse stat — comm field (field 2) can contain spaces and parens.
+        # Find the last ')' which ends the comm field, then split from there.
+        stat_raw = open(f"/proc/{pid}/stat").read()
+        last_paren = stat_raw.rfind(")")
+        if last_paren == -1:
+            raise ValueError("Cannot find ')' in stat")
+        # Fields after ')' are: state(1) ppid(2) pgrp(3) session(4) tty(5) tpgid(6)
+        # flags(7) minflt(8) cminflt(9) cmajflt(10) utime(11) stime(12)
+        # cutime(13) cstime(14) priority(15) nice(16) num_threads(17)
+        # itrealvalue(18) starttime(19) vsize(20) rss(21)
+        # starttime is field 20 (1-indexed) = index 19 (0-indexed) after ')'
+        stat_parts = stat_raw[last_paren+1:].split()
+        if len(stat_parts) >= 19:
+            starttime_ticks = float(stat_parts[18])   # stat[18] = starttime
+            clk_tck = os.sysconf('SC_CLK_TCK')
+            if clk_tck <= 0:
+                clk_tck = 100  # fallback for WSL where sysconf may return -1
             uptime_str = open("/proc/uptime").read().split()[0]
-            info["uptime_s"] = round(float(uptime_str) - starttime / 100.0, 1)
-    except (IOError, ValueError, IndexError):
+            info["uptime_s"] = round(float(uptime_str) - starttime_ticks / clk_tck, 1)
+    except (IOError, ValueError, IndexError, OSError):
         pass
     return info
 
