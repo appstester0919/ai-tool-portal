@@ -30,14 +30,19 @@
   }
 
   function StatusDot({ status }) {
+    // Color: green=up, yellow=warning, gray=down/unknown
+    // Add glow shadow + larger size for visibility at a glance
     const colors = {
-      up: "bg-green-500",
-      warning: "bg-yellow-500",
-      down: "bg-gray-400",
-      unknown: "bg-gray-400",
+      up:      { bg: "bg-green-500",  shadow: "shadow-[0_0_6px_rgba(34,197,94,0.7)]" },
+      warning: { bg: "bg-yellow-500", shadow: "shadow-[0_0_6px_rgba(234,179,8,0.7)]" },
+      down:    { bg: "bg-gray-500",   shadow: "" },
+      unknown: { bg: "bg-gray-500",   shadow: "" },
     };
-    const cls = colors[status] || colors.unknown;
-    return React.createElement("span", { className: `inline-block h-2 w-2 rounded-full ${cls}` });
+    const c = colors[status] || colors.unknown;
+    return React.createElement("span", {
+      className: `inline-block h-2.5 w-2.5 rounded-full ${c.bg} ${c.shadow}`,
+      title: status,
+    });
   }
 
   // ── Icon-only Action Buttons ───────────────────────────────────
@@ -91,9 +96,10 @@
     },
       // Header row
       React.createElement("div", { className: "flex items-center justify-between" },
-        React.createElement("div", { className: "flex items-center gap-2" },
+        React.createElement("div", { className: "flex items-center gap-2 min-w-0" },
+          React.createElement(StatusDot, { status }),
           React.createElement("span", { className: "text-base" }, tool.icon || "⚙️"),
-          React.createElement("span", { className: "font-semibold text-sm" }, tool.name)
+          React.createElement("span", { className: "font-semibold text-sm truncate" }, tool.name)
         ),
         React.createElement("span", {
           className: `text-[10px] px-1.5 py-0.5 rounded-full border uppercase tracking-wider font-medium ${badgeCls}`
@@ -185,6 +191,7 @@
     const [lastUpdated, setLastUpdated] = useState(null);
     const [error, setError]       = useState(null);
     const [loading, setLoading]   = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
     // Action modal state
     const [pendingAction, setPendingAction] = useState(null);
@@ -204,6 +211,7 @@
       if (!sdk?.fetchJSON) return;
 
       const doFetch = async () => {
+        if (mounted.current) setRefreshing(true);
         try {
           const json = await sdk.fetchJSON("/api/plugins/ai-tool-portal/tools");
           setTools(json.tools || []);
@@ -214,6 +222,7 @@
           setError(e.message);
         } finally {
           setLoading(false);
+          if (mounted.current) setRefreshing(false);
         }
       };
 
@@ -294,8 +303,9 @@
             lastUpdated && React.createElement("span", null, "Updated " + lastUpdated.toLocaleTimeString()),
             React.createElement("button", {
               onClick: () => { if (fetchFnRef.current) fetchFnRef.current(); },
-              className: "px-3 py-1.5 border border-border rounded-md text-xs hover:bg-muted transition-colors uppercase tracking-wider cursor-pointer"
-            }, "↻ Refresh")
+              disabled: refreshing,
+              className: `px-3 py-1.5 border border-border rounded-md text-xs uppercase tracking-wider transition-colors ${refreshing ? "bg-muted opacity-70 cursor-wait" : "hover:bg-muted cursor-pointer"}`
+            }, React.createElement("span", { className: refreshing ? "inline-block animate-spin" : "inline-block" }, "↻"), " ", refreshing ? "Refreshing" : "Refresh")
           )
         ),
 
