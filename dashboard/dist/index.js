@@ -16,8 +16,8 @@
     return;
   }
 
-  const React = SDK.React;
-  const { useState, useEffect, useCallback } = SDK.hooks;
+  const React = window.__HERMES_PLUGIN_SDK__.React;
+  const { useState, useEffect, useCallback, useRef, startTransition } = window.__HERMES_PLUGIN_SDK__.hooks;
 
   // ── Helpers ────────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@
         onClick: () => onAction(tool.tool_id || tool.id, action),
         disabled: !enabled,
         title,
-        className: `w-7 h-7 rounded flex items-center justify-center text-xs transition-colors border ${colorCls} ${hoverCls} ${enabled ? "cursor-pointer" : "cursor-not-allowed opacity-30"}`
+        className: `w-9 h-9 rounded-lg flex items-center justify-center text-sm transition-colors border ${colorCls} ${hoverCls} ${enabled ? "cursor-pointer" : "cursor-not-allowed opacity-30"}`
       }, label);
 
     return React.createElement("div", {
@@ -87,7 +87,7 @@
     const badgeCls  = STATUS_BADGE[status]  || STATUS_BADGE.down;
 
     return React.createElement("div", {
-      className: `flex flex-col gap-2 p-3 rounded-xl border bg-card text-card-foreground shadow-sm hover:border-primary/30 transition-colors ${borderCls}`
+      className: `flex flex-col gap-2 p-4 rounded-xl border bg-card text-card-foreground shadow-sm hover:border-primary/30 transition-colors ${borderCls}`
     },
       // Header row
       React.createElement("div", { className: "flex items-center justify-between" },
@@ -191,25 +191,38 @@
     const [actionLoading, setActionLoading] = useState(false);
     const [actionError, setActionError]     = useState(null);
 
-    const fetchData = useCallback(async () => {
-      try {
-        const json = await SDK.fetchJSON("/api/plugins/ai-tool-portal/tools");
-        setTools(json.tools || []);
-        setCategories(json.categories || []);
-        setError(null);
-        setLastUpdated(new Date());
-      } catch (e) {
-        setError(e.message);
-      } finally {
-        setLoading(false);
-      }
-    }, []);
+    // Track if component is still mounted to avoid state updates after unmount
+    const mounted = useRef(false);
+    useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; });
+
+    // Store fetch function in ref so Refresh button can call it
+    const fetchFnRef = useRef(null);
 
     useEffect(() => {
-      fetchData();
-      const id = setInterval(fetchData, 30000);
+      if (!mounted.current) return;
+      const sdk = window.__HERMES_PLUGIN_SDK__;
+      if (!sdk?.fetchJSON) return;
+
+      const doFetch = async () => {
+        try {
+          const json = await sdk.fetchJSON("/api/plugins/ai-tool-portal/tools");
+          setTools(json.tools || []);
+          setCategories(json.categories || []);
+          setError(null);
+          setLastUpdated(new Date());
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchFnRef.current = doFetch;
+      doFetch();
+
+      const id = setInterval(doFetch, 30000);
       return () => clearInterval(id);
-    }, [fetchData]);
+    }, []);
 
     const doAction = useCallback((toolId, action) => {
       const registryTool = tools.find(t => (t.tool_id || t.id) === toolId);
@@ -232,12 +245,16 @@
       setActionLoading(true);
       setActionError(null);
       try {
-        const result = await SDK.fetchJSON(
+        const sdk = window.__HERMES_PLUGIN_SDK__;
+        const result = await sdk.fetchJSON(
           `/api/plugins/ai-tool-portal/tools/${toolId}/action?action=${action}&confirm=true`,
           { method: "POST" }
         );
         if (result.ok) {
-          setTimeout(() => { closeModal(); fetchData(); }, 1500);
+          setTimeout(() => {
+            closeModal();
+            if (fetchFnRef.current) fetchFnRef.current();
+          }, 1500);
         } else {
           setActionError(result.stderr || result.error || `Action failed (exit ${result.exit_code})`);
           setActionLoading(false);
@@ -246,7 +263,7 @@
         setActionError(e.message);
         setActionLoading(false);
       }
-    }, [pendingAction, closeModal, fetchData]);
+    }, [pendingAction, closeModal]);
 
     // Build health map for O(1) lookup
     const healthMap = {};
@@ -276,7 +293,7 @@
           React.createElement("div", { className: "flex items-center gap-3 text-xs text-muted-foreground" },
             lastUpdated && React.createElement("span", null, "Updated " + lastUpdated.toLocaleTimeString()),
             React.createElement("button", {
-              onClick: fetchData,
+              onClick: () => { if (fetchFnRef.current) fetchFnRef.current(); },
               className: "px-3 py-1.5 border border-border rounded-md text-xs hover:bg-muted transition-colors uppercase tracking-wider cursor-pointer"
             }, "↻ Refresh")
           )
