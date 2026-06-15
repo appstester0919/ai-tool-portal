@@ -500,16 +500,22 @@ async def all_tools():
         checker = CHECKERS.get(tool["id"])
         if checker:
             health = checker(tool)
-            summaries.append(health)
         else:
-            summaries.append({
-                "tool_id": tool["id"],
-                "name": tool["name"],
-                "category": tool["category"],
-                "icon": tool["icon"],
+            health = {
                 "status": "unknown",
                 "checked_at": now_iso(),
-            })
+            }
+        # Enrich with static fields the frontend needs (port, clickable URL).
+        # v1.3: clickable port links — add default_port + service URL.
+        # URL is built lazily so port changes in TOOLS propagate without code edits.
+        dp = tool.get("default_port")
+        health["tool_id"]      = tool["id"]
+        health["name"]         = tool["name"] or tool["id"]
+        health["category"]     = tool["category"] or "uncategorized"
+        health["icon"]         = tool.get("icon") or "⚙️"
+        health["default_port"] = dp
+        health["url"]          = f"http://127.0.0.1:{dp}" if dp else None
+        summaries.append(health)
     return {
         "tools": summaries,
         "categories": CATEGORIES,
