@@ -132,7 +132,28 @@
       React.createElement("div", { className: "grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]" },
         React.createElement("div", { className: "flex flex-col" },
           React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[9px]" }, "Port"),
-          React.createElement("span", { className: "font-mono" }, tool.port || tool.default_port || "—")
+          // v1.3: clickable link when service is up. v1.3-alpha backend
+          // exposes tool.url = http://127.0.0.1:{default_port}.
+          (function() {
+            const portVal = tool.port || tool.default_port;
+            if (!portVal) {
+              return React.createElement("span", { className: "font-mono text-muted-foreground" }, "—");
+            }
+            const isUp = health?.status === "up" && health?.port_listening && tool.url;
+            if (isUp) {
+              return React.createElement("a", {
+                href: tool.url,
+                target: "_blank",
+                rel: "noopener noreferrer",
+                className: "font-mono text-primary hover:underline cursor-pointer",
+                title: `Open ${tool.name} (${tool.url})`
+              }, portVal);
+            }
+            return React.createElement("span", {
+              className: "font-mono text-muted-foreground",
+              title: "Start the service to open its URL"
+            }, portVal);
+          })()
         ),
         React.createElement("div", { className: "flex flex-col" },
           React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[9px]" }, "PID"),
