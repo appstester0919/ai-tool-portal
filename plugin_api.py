@@ -213,12 +213,22 @@ def exec_action(tool: dict, action: str) -> dict:
         elif atype == "nohup":
             cmd = spec["cmd"]
             log_path = os.path.expanduser(tool.get("launch", {}).get("log", "/tmp/nohup.log"))
+            cwd = spec.get("cwd")
+            if cwd:
+                cwd = os.path.expanduser(cwd)
+            env = os.environ.copy()
+            env.update(tool.get("launch", {}).get("env", {}))
+            # Build a safe command: expand ~ in cmd parts, support cwd via Popen kwarg
+            cmd_expanded = os.path.expanduser(cmd)
+            full = f"nohup {cmd_expanded} >> {log_path} 2>&1 & disown"
             subprocess.Popen(
-                f"nohup {cmd} >> {log_path} 2>&1 &",
-                shell=True, env=os.environ.copy()
+                full,
+                shell=True, env=env,
+                cwd=cwd,
+                start_new_session=True,
             )
             result["ok"] = True
-            result["stdout"] = f"nohup {cmd} >> {log_path}"
+            result["stdout"] = f"nohup {cmd_expanded} >> {log_path} (cwd={cwd})"
 
         elif atype == "stop_then_start":
             stop_result = exec_action(tool, "stop")

@@ -552,8 +552,38 @@ async def tool_action(tool_id: str, action: str = None, confirm: bool = False):
         return {"ok": False, "error": f"Unknown action: {action}", "tool_id": tool_id}
     if not action_cmd:
         return {"ok": False, "error": f"No {action} cmd for {tool_id}", "tool_id": tool_id}
+    # Support strings OR lists. For shell-style commands with `cd X && cmd &`,
+    # we need shell=True (list mode can't interpret `&&` / `&` / redirections).
+    # For backgrounded processes we also detach with start_new_session.
     start_time = time.time()
-    out, err, rc = run_cmd(action_cmd.split(" ") if isinstance(action_cmd, str) else action_cmd, timeout_s=30)
+    if isinstance(action_cmd, str):
+        is_background = action_cmd.rstrip().endswith("&")
+        if is_background:
+            # Strip the trailing & — Popen + start_new_session detaches it.
+            shell_cmd = action_cmd.rstrip().rstrip("&").rstrip()
+            try:
+                subprocess.Popen(
+                    shell_cmd,
+                    shell=True,
+                    env=os.environ.copy(),
+                    start_new_session=True,
+                )
+                rc, out, err = 0, f"launched: {shell_cmd}", ""
+            except Exception as e:
+                rc, out, err = 1, "", str(e)
+        else:
+            try:
+                r = subprocess.run(
+                    action_cmd, shell=True,
+                    capture_output=True, text=True, timeout=30,
+                )
+                out, err, rc = r.stdout, r.stderr, r.returncode
+            except subprocess.TimeoutExpired:
+                out, err, rc = "", "timeout after 30s", 124
+            except Exception as e:
+                out, err, rc = "", str(e), 1
+    else:
+        out, err, rc = run_cmd(action_cmd, timeout_s=30)
     return {
         "ok": rc == 0,
         "stdout": out[:500],

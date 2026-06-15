@@ -112,9 +112,10 @@ TOOLS = [
         "version_pattern": r"v([0-9.]+)",
         "launch": {
             "type": "nohup",
-            "cmd": "python3 ~/.hermes/scripts/prayer_server_v3.py",
-            "log": "~/.hermes/logs/prayer_server.log",
-            "env": {"FLASK_ENV": "production"},
+            "cmd": "python3 $HOME/.hermes/scripts/prayer_server_v3.py",
+            "cwd": "$HOME/.hermes/scripts",
+            "log": "$HOME/.hermes/logs/prayer_server.log",
+            "env": {"FLASK_ENV": "production", "HOME": "/home/appstester0919"},
         },
         "stop": {"type": "kill_by_pattern", "pattern": "prayer_server_v3.py"},
         "restart": {"type": "stop_then_start"},
