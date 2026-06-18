@@ -56,21 +56,21 @@
     const canStop   = status === "up"   || status === "warning";
     const canRestart = status === "up"  || status === "warning";
 
-    const btn = (label, action, enabled, colorCls, hoverCls, title) =>
+    const btn = (label, action, enabled, colorCls, hoverCls, title, sizeCls = "w-9 h-9") =>
       React.createElement("button", {
         key: action,
         onClick: () => onAction(tool.tool_id || tool.id, action),
         disabled: !enabled,
         title,
-        className: `w-9 h-9 rounded-lg flex items-center justify-center text-sm transition-colors border ${colorCls} ${hoverCls} ${enabled ? "cursor-pointer" : "cursor-not-allowed opacity-30"}`
+        className: `${sizeCls} rounded-lg flex items-center justify-center text-sm transition-colors border ${colorCls} ${hoverCls} ${enabled ? "cursor-pointer" : "cursor-not-allowed opacity-30"}`
       }, label);
 
     return React.createElement("div", {
-      className: "flex items-center gap-1 pt-2 border-t border-border mt-2"
+      className: `flex items-center justify-end gap-0.5 pt-1 mt-1 border-t border-border`
     },
-      btn("▶", "start",   canStart,  "text-green-500 border-green-500/20 hover:bg-green-500/20",  "text-green-500/10",  "Start "  + tool.name),
-      btn("■", "stop",    canStop,   "text-red-500   border-red-500/20    hover:bg-red-500/20",    "text-red-500/10",    "Stop "   + tool.name),
-      btn("↻", "restart", canRestart,"text-blue-500  border-blue-500/20   hover:bg-blue-500/20",   "text-blue-500/10",   "Restart "+ tool.name)
+      btn("▶", "start",   canStart,  "text-green-500 border-green-500/20 hover:bg-green-500/20",  "text-green-500/10",  "Start "  + tool.name, "h-7 w-7"),
+      btn("■", "stop",    canStop,   "text-red-500   border-red-500/20    hover:bg-red-500/20",    "text-red-500/10",    "Stop "   + tool.name, "h-7 w-7"),
+      btn("↻", "restart", canRestart,"text-blue-500  border-blue-500/20   hover:bg-blue-500/20",   "text-blue-500/10",   "Restart "+ tool.name, "h-7 w-7")
     );
   }
 
@@ -110,32 +110,26 @@
     }[rssStatus] || "";
 
     return React.createElement("div", {
-      className: `flex flex-col gap-2 p-4 rounded-xl border bg-card text-card-foreground shadow-sm hover:border-primary/30 transition-colors ${borderCls}`
+      className: `flex flex-col gap-1 p-2.5 rounded-lg border bg-card text-card-foreground shadow-sm hover:border-primary/30 transition-colors ${borderCls}`
     },
-      // Header row: name on top line (full width, no truncation),
-      // then icon+dot+status badge on second line.
-      React.createElement("div", { className: "flex flex-col gap-1.5" },
-        // Tool name (can wrap if very long)
-        React.createElement("div", { className: "flex items-center gap-2" },
-          React.createElement("span", { className: "text-base" }, tool.icon || "⚙️"),
-          React.createElement("span", { className: "font-semibold text-sm leading-tight" }, tool.name)
+      // Row 1: icon + name (left) | status dot + badge (right)
+      React.createElement("div", { className: "flex items-center justify-between gap-2" },
+        React.createElement("div", { className: "flex items-center gap-1.5 min-w-0 flex-1" },
+          React.createElement("span", { className: "text-sm flex-shrink-0" }, tool.icon || "⚙️"),
+          React.createElement("span", { className: "font-semibold text-[13px] leading-tight truncate" }, tool.name)
         ),
-        // Status row: dot + badge
-        React.createElement("div", { className: "flex items-center gap-1.5" },
+        React.createElement("div", { className: "flex items-center gap-1 flex-shrink-0" },
           React.createElement(StatusDot, { status: effectiveDot }),
           React.createElement("span", {
-            className: `text-[10px] px-1.5 py-0.5 rounded-full border uppercase tracking-wider font-medium ${badgeCls}`
+            className: `text-[9px] px-1 py-0.5 rounded-full border uppercase tracking-wider font-medium ${badgeCls}`
           }, effectiveDot === "ok" ? "up" : (effectiveDot === "warn" ? "up-hi" : (effectiveDot === "crit" ? "up+ram" : effectiveDot)))
         )
       ),
-      // Meta grid
-      React.createElement("div", { className: "grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]" },
-        React.createElement("div", { className: "flex flex-col" },
-          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[9px]" }, "Port"),
-          // v1.3: clickable link when service is up. v1.3-alpha backend
-          // exposes tool.url = http://127.0.0.1:{default_port}.
-          (function() {
-            const portVal = tool.port || tool.default_port;
+      // Row 2: meta only (single line, allow wrap)
+      React.createElement("div", { className: "flex items-center gap-x-1.5 text-[10px] flex-wrap" },
+        (function() {
+          const portVal = tool.port || tool.default_port;
+          const portNode = (() => {
             if (!portVal) {
               return React.createElement("span", { className: "font-mono text-muted-foreground" }, "—");
             }
@@ -153,30 +147,34 @@
               className: "font-mono text-muted-foreground",
               title: "Start the service to open its URL"
             }, portVal);
-          })()
-        ),
-        React.createElement("div", { className: "flex flex-col" },
-          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[9px]" }, "PID"),
+          })();
+          return React.createElement("span", { className: "flex items-center gap-0.5" },
+            React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[8px]" }, "p"),
+            portNode
+          );
+        })(),
+        React.createElement("span", { className: "flex items-center gap-0.5" },
+          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[8px]" }, "pid"),
           React.createElement("span", { className: `font-mono ${health?.pid ? "" : "text-muted-foreground"}` },
             health?.pid || "—")
         ),
-        React.createElement("div", { className: "flex flex-col" },
-          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[9px]" }, "RSS"),
-          React.createElement("span", {
-            className: `font-mono ${rssColor || (health?.rss_mb ? "" : "text-muted-foreground")}`,
-            title: health?.rss_warn_mb
-              ? `Normal < ${health.rss_warn_mb}MB · Warn ≥ ${health.rss_warn_mb}MB · Crit ≥ ${health.rss_max_mb}MB`
-              : "No threshold set"
-          },
-            health?.rss_mb != null ? health.rss_mb.toFixed(1) + " MB" : "—")
+        React.createElement("span", {
+          className: "flex items-center gap-0.5",
+          title: health?.rss_warn_mb
+            ? `Normal < ${health.rss_warn_mb}MB · Warn ≥ ${health.rss_warn_mb}MB · Crit ≥ ${health.rss_max_mb}MB`
+            : "No threshold set"
+        },
+          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[8px]" }, "rss"),
+          React.createElement("span", { className: `font-mono ${rssColor || (health?.rss_mb ? "" : "text-muted-foreground")}` },
+            health?.rss_mb != null ? health.rss_mb.toFixed(0) + "MB" : "—")
         ),
-        React.createElement("div", { className: "flex flex-col" },
-          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[9px]" }, "Uptime"),
+        React.createElement("span", { className: "flex items-center gap-0.5" },
+          React.createElement("span", { className: "text-muted-foreground uppercase tracking-wider text-[8px]" }, "up"),
           React.createElement("span", { className: `font-mono ${health?.uptime_s != null ? "" : "text-muted-foreground"}` },
             fmtUptime(health?.uptime_s))
         )
       ),
-      // Action buttons
+      // Row 3: action buttons (right-aligned)
       React.createElement(ActionButtons, { tool, health, onAction })
     );
   }
@@ -343,7 +341,7 @@
     });
 
     return React.createElement(React.Fragment, null,
-      React.createElement("div", { className: "flex flex-col gap-5 p-5" },
+      React.createElement("div", { className: "flex flex-col gap-3 p-3" },
         // Header
         React.createElement("div", { className: "flex items-center justify-between" },
           React.createElement("div", { className: "flex items-center gap-2" },
@@ -383,14 +381,14 @@
         !loading && categories.map(cat => {
           const catTools = byCategory[cat.id] || [];
           if (!catTools.length) return null;
-          return React.createElement("div", { key: cat.id, className: "flex flex-col gap-3" },
+          return React.createElement("div", { key: cat.id, className: "flex flex-col gap-2" },
             React.createElement("div", {
-              className: "flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground font-medium border-b border-border pb-1"
+              className: "flex items-center gap-2 text-[11px] uppercase tracking-wider text-muted-foreground font-medium border-b border-border/50 pb-0.5"
             },
               React.createElement("span", null, cat.label || cat.id),
               React.createElement("span", { className: "text-[10px] px-1.5 py-0.5 rounded bg-muted" }, catTools.length)
             ),
-            React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" },
+            React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2" },
               catTools.map(t =>
                 React.createElement(ToolCard, {
                   key: t.tool_id || t.id,
