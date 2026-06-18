@@ -66,11 +66,11 @@
       }, label);
 
     return React.createElement("div", {
-      className: `flex items-center justify-end gap-0.5 pt-1 mt-1 border-t border-border`
+      className: `flex items-center justify-end gap-1 pt-1.5 mt-1.5 border-t border-border`
     },
-      btn("▶", "start",   canStart,  "text-green-500 border-green-500/20 hover:bg-green-500/20",  "text-green-500/10",  "Start "  + tool.name, "h-7 w-7"),
-      btn("■", "stop",    canStop,   "text-red-500   border-red-500/20    hover:bg-red-500/20",    "text-red-500/10",    "Stop "   + tool.name, "h-7 w-7"),
-      btn("↻", "restart", canRestart,"text-blue-500  border-blue-500/20   hover:bg-blue-500/20",   "text-blue-500/10",   "Restart "+ tool.name, "h-7 w-7")
+      btn("▶", "start",   canStart,  "text-green-500 border-green-500/20 hover:bg-green-500/20",  "text-green-500/10",  "Start "  + tool.name),
+      btn("■", "stop",    canStop,   "text-red-500   border-red-500/20    hover:bg-red-500/20",    "text-red-500/10",    "Stop "   + tool.name),
+      btn("↻", "restart", canRestart,"text-blue-500  border-blue-500/20   hover:bg-blue-500/20",   "text-blue-500/10",   "Restart "+ tool.name)
     );
   }
 
