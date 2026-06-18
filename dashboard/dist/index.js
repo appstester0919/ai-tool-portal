@@ -126,7 +126,7 @@
         )
       ),
       // Row 2: meta only (single line, allow wrap)
-      React.createElement("div", { className: "flex items-center gap-x-1.5 text-[10px] flex-wrap" },
+      React.createElement("div", { className: "flex items-center gap-x-1.5 gap-y-0.5 text-[10px] flex-wrap min-w-0" },
         (function() {
           const portVal = tool.port || tool.default_port;
           const portNode = (() => {
@@ -388,7 +388,7 @@
               React.createElement("span", null, cat.label || cat.id),
               React.createElement("span", { className: "text-[10px] px-1.5 py-0.5 rounded bg-muted" }, catTools.length)
             ),
-            React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2" },
+            React.createElement("div", { className: "grid grid-cols-2 lg:grid-cols-3 gap-2" },
               catTools.map(t =>
                 React.createElement(ToolCard, {
                   key: t.tool_id || t.id,
