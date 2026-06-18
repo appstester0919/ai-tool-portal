@@ -1,6 +1,11 @@
 """
-AI Tool Portal — tools_registry.py v0.2
-Tool definitions: port, detection, actions for all services.
+AI Tool Portal — tools_registry.py
+
+NOTE: This file is the canonical registry consumed by the top-level
+plugin_api.py (Hermes plugin manager). The user-facing dashboard UI
+uses dashboard/plugin_api.py which has its own inline TOOLS list —
+when adding/modifying tools, update BOTH files in lockstep, or the
+dashboard will diverge from this registry.
 """
 import os, re, subprocess
 from typing import Optional
@@ -251,11 +256,47 @@ TOOLS = [
         "stop": {"type": "kill_by_pattern", "pattern": "ComfyUI_win_data/main.py"},
         "restart": {"type": "stop_then_start"},
     },
+    # ── Local LLM ─────────────────────────────────────────────
+    {
+        "id": "qwen-27b",
+        "name": "Qwen — 27B (IQ4_XS)",
+        "category": "llm",
+        "icon": "🧠",
+        "default_port": 8080,
+        "process_patterns": ["Qwen3.6-27B-IQ4_XS"],
+        "process_comm_filter": "llama",
+        "version_cmd": None,
+        "launch": {
+            "type": "nohup",
+            "cmd": "/home/appstester0919/llama.cpp/build/bin/llama-server -m /mnt/d/Models/Qwen3.6-27B-IQ4_XS.gguf --host 0.0.0.0 --port 8080 -ngl 99 -t 8 -c 16384 -b 8 --reasoning off",
+            "log": "$HOME/.hermes/logs/qwen-27b.log",
+        },
+        "stop": {"type": "kill_by_pattern", "pattern": "Qwen3.6-27B-IQ4_XS"},
+        "restart": {"type": "stop_then_start"},
+    },
+    {
+        "id": "qwen-35b",
+        "name": "Qwen — 35B-A3B (UD-Q3)",
+        "category": "llm",
+        "icon": "⚡",
+        "default_port": 8080,
+        "process_patterns": ["Qwen3.6-35B-A3B-UD-Q3_K_XL"],
+        "process_comm_filter": "llama",
+        "version_cmd": None,
+        "launch": {
+            "type": "nohup",
+            "cmd": "/home/appstester0919/llama.cpp/build/bin/llama-server -m /mnt/d/Models/Qwen3.6-35B-A3B-UD-Q3_K_XL.gguf --host 0.0.0.0 --port 8080 -ngl 99 -t 8 -c 16384 -b 8 --n-cpu-moe 14 --reasoning off",
+            "log": "$HOME/.hermes/logs/qwen-35b.log",
+        },
+        "stop": {"type": "kill_by_pattern", "pattern": "Qwen3.6-35B-A3B-UD-Q3_K_XL"},
+        "restart": {"type": "stop_then_start"},
+    },
 ]
 
 CATEGORIES = [
     {"id": "gateway",   "label": "Gateway / Agent",  "icon": "🔐", "tool_ids": ["openclaw", "hermes_gateway", "hermes_dashboard"]},
     {"id": "scheduler", "label": "Schedulers",       "icon": "📅", "tool_ids": ["n8n", "prayer_server"]},
+    {"id": "llm",       "label": "Local LLM",        "icon": "🧠", "tool_ids": ["qwen-27b", "qwen-35b"]},
     {"id": "ai_image",  "label": "AI Image",         "icon": "🎨", "tool_ids": ["comfyui_3d", "comfyui_documents", "comfyui_heartmula", "comfyui_ideogram", "comfyui_krita", "comfyui_mie", "comfyui_standard", "comfyui_win_data"]},
     {"id": "ai_video",  "label": "AI Video",         "icon": "🎬", "tool_ids": ["comfyui_ltx"]},
     {"id": "ai_audio",  "label": "AI Audio",          "icon": "🔊", "tool_ids": ["comfyui_qwen3tts"]},

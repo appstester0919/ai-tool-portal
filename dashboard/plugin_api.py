@@ -113,12 +113,30 @@ TOOLS = [
      "process_patterns": ["ComfyUI_Documents"],
      "process_comm_filter": "python",
      "rss_warn_mb": 4000, "rss_max_mb": 8000},
+    # ── Local LLM ─────────────────────────────────────────────────
+    {"id": "qwen-27b", "name": "Qwen — 27B (IQ4_XS)", "category": "llm", "icon": "Brain",
+     "default_port": 8080,
+     "process_patterns": ["Qwen3.6-27B-IQ4_XS"],
+     "process_comm_filter": "llama-server",
+     "rss_warn_mb": 14000, "rss_max_mb": 16000,
+     "start_cmd": f"pkill -f 'llama-server' && sleep 3 && nohup {HOME}/llama.cpp/build/bin/llama-server -m /mnt/d/Models/Qwen3.6-27B-IQ4_XS.gguf --host 0.0.0.0 --port 8080 -ngl 99 -t 8 -c 16384 -b 512 -fa on --reasoning off > {HOME}/.hermes/logs/qwen-27b.log 2>&1 &",
+     "stop_cmd": "pkill -f 'llama-server'",
+     "restart_cmd": "pkill -f 'llama-server' && sleep 3"},
+    {"id": "qwen-35b", "name": "Qwen — 35B-A3B (UD-Q3)", "category": "llm", "icon": "Zap",
+     "default_port": 8080,
+     "process_patterns": ["Qwen3.6-35B-A3B-UD-Q3_K_XL"],
+     "process_comm_filter": "llama-server",
+     "rss_warn_mb": 11000, "rss_max_mb": 14000,
+     "start_cmd": f"pkill -f 'llama-server' && sleep 3 && nohup {HOME}/llama.cpp/build/bin/llama-server -m /mnt/d/Models/Qwen3.6-35B-A3B-UD-Q3_K_XL.gguf --host 0.0.0.0 --port 8080 -ngl 99 -t 8 -c 16384 -b 512 -fa on --n-cpu-moe 14 --reasoning off > {HOME}/.hermes/logs/qwen-35b.log 2>&1 &",
+     "stop_cmd": "pkill -f 'llama-server'",
+     "restart_cmd": "pkill -f 'llama-server' && sleep 3"},
 ]
 
 CATEGORIES = [
     {"id": "gateway", "label": "Gateways", "icon": "Gateway"},
     {"id": "workflow", "label": "Workflow Engines", "icon": "Workflow"},
     {"id": "scheduler", "label": "Schedulers", "icon": "Clock"},
+    {"id": "llm", "label": "Local LLM", "icon": "Brain"},
     {"id": "ai_image", "label": "AI Image", "icon": "Image"},
     {"id": "ai_video", "label": "AI Video", "icon": "Video"},
     {"id": "ai_audio", "label": "AI Audio", "icon": "Music"},
@@ -463,6 +481,7 @@ def check_comfyui(tool: dict) -> dict:
         "checked_at": now_iso(),
     }
 
+check_qwen = check_comfyui  # identical pattern: process + port
 
 CHECKERS = {
     "openclaw": check_openclaw,
@@ -480,6 +499,9 @@ CHECKERS = {
     "comfyui_qwen3tts": check_comfyui,
     "comfyui_win_data": check_comfyui,
     "comfyui_documents": check_comfyui,
+    # Local LLM
+    "qwen-27b": check_qwen,
+    "qwen-35b": check_qwen,
 }
 
 
@@ -561,12 +583,31 @@ async def tool_action(tool_id: str, action: str = None, confirm: bool = False):
     # Support strings OR lists. For shell-style commands with `cd X && cmd &`,
     # we need shell=True (list mode can't interpret `&&` / `&` / redirections).
     # For backgrounded processes we also detach with start_new_session.
+    #
+    # CRITICAL: when action_cmd contains its own `pkill -f <pattern>`, the shell
+    # created by Popen(shell=True) has argv containing that pattern, so pkill
+    # matches its own shell and kills it before the rest of the chain runs.
+    # Fix: split the cmd. Run the `pkill ... && sleep N` prefix in a SEPARATE
+    # shell (which dies naturally), then launch the nohup on a clean argv.
     start_time = time.time()
+    rc, out, err = 0, "", ""
     if isinstance(action_cmd, str):
         is_background = action_cmd.rstrip().endswith("&")
         if is_background:
             # Strip the trailing & — Popen + start_new_session detaches it.
             shell_cmd = action_cmd.rstrip().rstrip("&").rstrip()
+            # If the cmd contains a pkill-prefix that could match its own shell,
+            # extract and run that prefix first in a separate shell.
+            import re as _re
+            m = _re.search(r"^(pkill\b[^&]*)&&\s*(.*)$", shell_cmd, _re.DOTALL)
+            if m:
+                prefix = m.group(1)
+                launcher = m.group(2).strip()
+                try:
+                    subprocess.run(prefix, shell=True, timeout=30)
+                except Exception as e:
+                    return {"ok": False, "error": f"prefix failed: {e}", "tool_id": tool_id}
+                shell_cmd = launcher
             try:
                 subprocess.Popen(
                     shell_cmd,
@@ -591,11 +632,10 @@ async def tool_action(tool_id: str, action: str = None, confirm: bool = False):
     else:
         out, err, rc = run_cmd(action_cmd, timeout_s=30)
     return {
-        "ok": rc == 0,
+        "ok": rc == 0 or (128 <= rc <= 143),  # 128+N = process killed by signal N (SIGTERM=15)
         "stdout": out[:500],
         "stderr": err[:500],
         "exit_code": rc,
         "duration_ms": int((time.time() - start_time) * 1000),
         "tool_id": tool_id,
-        "action": action,
     }
