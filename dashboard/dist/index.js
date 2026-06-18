@@ -125,8 +125,8 @@
           }, effectiveDot === "ok" ? "up" : (effectiveDot === "warn" ? "up-hi" : (effectiveDot === "crit" ? "up+ram" : effectiveDot)))
         )
       ),
-      // Row 2: meta only (single line, allow wrap)
-      React.createElement("div", { className: "flex items-center gap-x-1.5 gap-y-0.5 text-[10px] flex-wrap min-w-0" },
+      // Row 2: meta — equally spaced across full width (gap fills space)
+      React.createElement("div", { className: "flex items-center justify-between gap-x-2 gap-y-0.5 text-[10px] flex-wrap min-w-0" },
         (function() {
           const portVal = tool.port || tool.default_port;
           const portNode = (() => {
