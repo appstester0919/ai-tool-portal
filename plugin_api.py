@@ -1,17 +1,21 @@
 """
-AI Tool Portal — plugin_api.py v0.2
+AI Tool Portal — plugin_api.py v1.1
 Backend: tool registry, health detection, action execution.
+
+Hermes dashboard mounts this router at /api/plugins/ai-tool-portal/
+via web_server.py:_mount_plugin_api_routes() — DO NOT hardcode the
+prefix in routes; use relative paths only.
 """
 import os, re, subprocess, time, signal
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from tools_registry import TOOLS, CATEGORIES
 
-app = FastAPI(title="ai-tool-portal", version="0.2.0")
+router = APIRouter()
 
 # ── Helpers ─────────────────────────────────────────────────────
 
@@ -257,7 +261,7 @@ class ActionRequest(BaseModel):
     action: str
     confirm: bool = False
 
-@app.get("/api/plugins/ai-tool-portal/tools")
+@router.get("/tools")
 async def list_tools():
     """Return tool registry metadata (no live probing)."""
     tool_summaries = []
@@ -271,7 +275,7 @@ async def list_tools():
         })
     return {"tools": tool_summaries, "categories": CATEGORIES}
 
-@app.get("/api/plugins/ai-tool-portal/tools/{tool_id}/health")
+@router.get("/tools/{tool_id}/health")
 async def tool_health(tool_id: str):
     """Live probe: pgrep + ss + /proc for real-time status."""
     tool = next((t for t in TOOLS if t["id"] == tool_id), None)
@@ -279,7 +283,7 @@ async def tool_health(tool_id: str):
         raise HTTPException(status_code=404, detail=f"Tool {tool_id} not found")
     return detect_tool(tool)
 
-@app.post("/api/plugins/ai-tool-portal/tools/{tool_id}/action")
+@router.post("/tools/{tool_id}/action")
 async def tool_action(tool_id: str, body: ActionRequest):
     if not body.confirm:
         raise HTTPException(status_code=400, detail="confirm=true required")
@@ -290,7 +294,7 @@ async def tool_action(tool_id: str, body: ActionRequest):
         raise HTTPException(status_code=404, detail=f"Tool {tool_id} not found")
     return exec_action(tool, body.action)
 
-@app.get("/api/plugins/ai-tool-portal/categories")
+@router.get("/categories")
 async def list_categories():
     return {"categories": CATEGORIES}
 
@@ -298,10 +302,10 @@ async def list_categories():
 
 if __name__ == "__main__":
     from fastapi.testclient import TestClient
-    client = TestClient(app)
+    client = TestClient(router)
 
     print("=== GET /tools ===")
-    r = client.get("/api/plugins/ai-tool-portal/tools")
+    r = client.get("/tools")
     print(f"Status: {r.status_code}")
     data = r.json()
     print(f"Tools count: {len(data['tools'])}")
@@ -309,9 +313,9 @@ if __name__ == "__main__":
 
     print("\n=== GET /tools/{id}/health ===")
     for tid in ["openclaw", "n8n", "hermes_gateway", "prayer_server"]:
-        r = client.get(f"/api/plugins/ai-tool-portal/tools/{tid}/health")
+        r = client.get(f"/tools/{tid}/health")
         if r.status_code == 200:
             h = r.json()
             print(f"  {tid}: status={h['status']}, port={h['port_listening']}, pid={h['pid']}, uptime_h={h.get('uptime_h')}")
 
-    print("\nv0.2 verify: PASS")
+    print("\nv1.1 verify: PASS")
