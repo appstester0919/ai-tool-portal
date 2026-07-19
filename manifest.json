@@ -1,7 +1,7 @@
 {
   "name": "ai-tool-portal",
   "version": "1.0.0",
-  "description": "v1.0: 15 tools, health detection, start/stop/restart, 30s refresh, live uptime ticker, localStorage collapse.",
+  "description": "v1.0: 17 tools, health detection, start/stop/restart, 30s refresh, live uptime ticker, localStorage collapse.",
   "author": "Hermes Agent",
   "hermes_version": ">=0.1.0",
   "dashboard": {
